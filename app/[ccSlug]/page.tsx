@@ -1,0 +1,437 @@
+'use client';
+
+import React, { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
+import { ShieldCheck, User, FileText, Send, CheckCircle2, AlertCircle, Calendar, Hash, Clock, Landmark } from 'lucide-react';
+import SignaturePad from '@/components/SignaturePad';
+import Sidebar from '@/components/Sidebar';
+
+interface PageProps {
+  params: Promise<{ ccSlug: string }>;
+}
+
+export default function RegistroIngresoPage({ params }: PageProps) {
+  const { ccSlug } = use(params);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string>('');
+  const [ccName, setCcName] = useState('');
+  const router = useRouter();
+
+  const [formData, setFormData] = useState({
+    fecha: new Date().toISOString().split('T')[0],
+    operador_cctv: '',
+    orden_trabajo: '',
+    visitante_nombre: '',
+    visitante_cedula: '',
+    hora_ingreso: '',
+    hora_salida: '',
+    tipo_funcionario: 'SMO',
+    especificar_funcionario: '',
+    detalle_actividad_autorizacion: '',
+    observaciones: '',
+  });
+
+  useEffect(() => {
+    validateSession();
+  }, [ccSlug]);
+
+  const validateSession = async () => {
+    try {
+      // 1. Validar que la sede exista en el backend
+      const response = await fetch(`${API_URL}/api/centros-comerciales/${ccSlug}`);
+      if (!response.ok) {
+        router.push('/');
+        return;
+      }
+      const ccData = await response.json();
+      setCcName(ccData.nombre);
+      localStorage.setItem('selectedCCId', ccData.id.toString());
+      localStorage.setItem('selectedCCName', ccData.nombre);
+
+      // 2. Verificar que exista un token activo
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        router.push(`/${ccSlug}/login`);
+        return;
+      }
+
+      setCheckingAuth(false);
+    } catch (e) {
+      console.error(e);
+      router.push('/');
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signature) {
+      setError('La firma es obligatoria.');
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${API_URL}/api/ingresos`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ...formData, firmaBase64: signature }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(`Registro guardado exitosamente.`);
+        setFormData({
+          fecha: new Date().toISOString().split('T')[0],
+          operador_cctv: '',
+          orden_trabajo: '',
+          visitante_nombre: '',
+          visitante_cedula: '',
+          hora_ingreso: '',
+          hora_salida: '',
+          tipo_funcionario: 'SMO',
+          especificar_funcionario: '',
+          detalle_actividad_autorizacion: '',
+          observaciones: '',
+        });
+        setSignature('');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        setError(data.message || 'Error al guardar el registro.');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (err) {
+      setError('Error de conexión con el servidor.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-sans">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+          <p className="text-sm font-semibold tracking-wide">Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
+      
+      {/* Sidebar Navigation */}
+      <Sidebar username="Administrador" />
+
+      {/* Main Form Area */}
+      <main className="flex-1 p-4 sm:p-8 overflow-y-auto max-w-5xl mx-auto w-full">
+        
+        {/* Header */}
+        <header className="mb-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200/60 pb-6">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                Nuevo Registro de Trabajo
+              </h1>
+              <p className="text-slate-500 text-sm mt-1">Completa los campos para registrar un nuevo reporte de actividad</p>
+            </div>
+            <div className="bg-white border border-slate-200 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-sm">
+              <Calendar className="text-blue-600" size={16} />
+              <span className="text-xs font-bold text-slate-700">
+                {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Form Container */}
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+          
+          {/* Alerts */}
+          {(success || error) && (
+            <div className="transition-all duration-300">
+              {success && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-5 rounded-2xl flex items-start gap-4">
+                  <CheckCircle2 className="shrink-0 text-emerald-600 mt-0.5" size={20} />
+                  <div>
+                    <h4 className="font-bold text-emerald-950">Registro Exitoso</h4>
+                    <p className="text-sm mt-1">{success} El reporte PDF se ha guardado en el servidor.</p>
+                  </div>
+                </div>
+              )}
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-800 p-5 rounded-2xl flex items-start gap-4">
+                  <AlertCircle className="shrink-0 text-red-600 mt-0.5" size={20} />
+                  <div>
+                    <h4 className="font-bold text-red-950">Ha ocurrido un problema</h4>
+                    <p className="text-sm mt-1">{error}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Card 1: Datos del Turno */}
+          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Información General</h3>
+                <p className="text-xs text-slate-400">Datos principales del turno y orden de trabajo</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fecha</label>
+                <input
+                  type="date"
+                  name="fecha"
+                  required
+                  value={formData.fecha}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Operador de Turno</label>
+                <input
+                  type="text"
+                  name="operador_cctv"
+                  required
+                  placeholder="Nombre completo"
+                  value={formData.operador_cctv}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  Orden de Trabajo <span className="text-[10px] text-slate-400 font-medium lowercase tracking-normal">(opcional)</span>
+                </label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    name="orden_trabajo"
+                    placeholder="Ej: OT-10293"
+                    value={formData.orden_trabajo}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold text-blue-600"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Datos del Visitante */}
+          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
+                <User size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Datos del Visitante / Funcionario</h3>
+                <p className="text-xs text-slate-400">Identificación del responsable del ingreso</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre Completo</label>
+                <input
+                  type="text"
+                  name="visitante_nombre"
+                  required
+                  placeholder="Ej: Carlos Mendoza"
+                  value={formData.visitante_nombre}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Documento / Cédula</label>
+                <input
+                  type="text"
+                  name="visitante_cedula"
+                  required
+                  placeholder="Ej: 10293847"
+                  value={formData.visitante_cedula}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo de Funcionario</label>
+                <select
+                  name="tipo_funcionario"
+                  value={formData.tipo_funcionario}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-bold"
+                >
+                  <option value="SMO">SMO</option>
+                  <option value="EPS">EPS</option>
+                  <option value="Proveedor">Proveedor</option>
+                  <option value="Otros">Otros</option>
+                </select>
+              </div>
+
+              {(formData.tipo_funcionario === 'Proveedor' || formData.tipo_funcionario === 'Otros') && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Especificar (Empresa/Entidad)</label>
+                  <input
+                    type="text"
+                    name="especificar_funcionario"
+                    required
+                    placeholder="Ej: Sointech / Empresa Externa"
+                    value={formData.especificar_funcionario}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Detalles del Trabajo */}
+          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
+                <FileText size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Actividad y Horarios</h3>
+                <p className="text-xs text-slate-400">Detalles técnicos del trabajo a realizar</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Clock size={14} className="text-slate-400" /> Hora de Ingreso
+                </label>
+                <input
+                  type="time"
+                  name="hora_ingreso"
+                  required
+                  value={formData.hora_ingreso}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Clock size={14} className="text-slate-400" /> Hora de Salida <span className="text-[10px] text-slate-400 font-medium lowercase tracking-normal">(opcional)</span>
+                </label>
+                <input
+                  type="time"
+                  name="hora_salida"
+                  value={formData.hora_salida}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Detalle de Actividad / Autorización</label>
+                <textarea
+                  name="detalle_actividad_autorizacion"
+                  required
+                  rows={4}
+                  placeholder="Describa a detalle el motivo de las labores, áreas a intervenir y quién autoriza el procedimiento..."
+                  value={formData.detalle_actividad_autorizacion}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Observaciones <span className="text-[10px] text-slate-400 font-medium lowercase tracking-normal">(opcional)</span></label>
+                <textarea
+                  name="observaciones"
+                  rows={2}
+                  placeholder="Incidencias, materiales utilizados u otra información relevante..."
+                  value={formData.observaciones}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Firma Digital */}
+          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
+                <Send size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Firma de Conformidad</h3>
+                <p className="text-xs text-slate-400">Es indispensable que el visitante dibuje su firma digital</p>
+              </div>
+            </div>
+
+            <div className="p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
+              <SignaturePad 
+                onSave={(data) => setSignature(data)} 
+                onClear={() => setSignature('')} 
+              />
+            </div>
+          </div>
+
+          {/* Form Submit Button */}
+          <div className="pt-4 flex justify-end">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-10 py-4 rounded-xl shadow-md shadow-blue-500/10 flex items-center justify-center gap-2.5 transition-all duration-300 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Procesando Registro...
+                </span>
+              ) : (
+                <>
+                  <Send size={16} />
+                  Guardar y Emitir Reporte
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+  );
+}
