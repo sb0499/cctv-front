@@ -1,23 +1,19 @@
-'use client';
-
-import React, { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, User, LogIn, AlertCircle, ArrowLeft, Landmark } from 'lucide-react';
 
-interface PageProps {
-  params: Promise<{ ccSlug: string }>;
-}
-
-export default function LoginPage({ params }: PageProps) {
-  const { ccSlug } = use(params);
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export default function LoginPage() {
+  const { ccSlug } = useParams<{ ccSlug: string }>();
+  const navigate = useNavigate();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [ccName, setCcName] = useState('');
+  const [ccLogo, setCcLogo] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [validatingCC, setValidatingCC] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     validateCC();
@@ -25,19 +21,28 @@ export default function LoginPage({ params }: PageProps) {
 
   const validateCC = async () => {
     try {
+      if (!ccSlug) {
+        navigate('/');
+        return;
+      }
       const response = await fetch(`${API_URL}/api/centros-comerciales/${ccSlug}`);
       if (!response.ok) {
-        router.push('/');
+        navigate('/');
         return;
       }
       const data = await response.json();
       setCcName(data.nombre);
+      const logoUrl = data.logo ? `${API_URL}/logos/${data.logo}` : `${API_URL}/logos/${ccSlug}.jpg`;
+      setCcLogo(logoUrl);
       localStorage.setItem('selectedCCId', data.id.toString());
       localStorage.setItem('selectedCCName', data.nombre);
+      localStorage.setItem('selectedCCColor', data.color || '#3b82f6');
+      localStorage.setItem('selectedCCLogo', logoUrl);
+      document.documentElement.style.setProperty('--primary-color', data.color || '#3b82f6');
       setValidatingCC(false);
     } catch (e) {
       console.error(e);
-      router.push('/');
+      navigate('/');
     }
   };
 
@@ -61,7 +66,9 @@ export default function LoginPage({ params }: PageProps) {
 
       if (response.ok) {
         localStorage.setItem('adminToken', data.token);
-        router.push(`/${ccSlug}`);
+        localStorage.setItem('adminUsername', data.username || username);
+        localStorage.setItem('adminNombreCompleto', data.nombreCompleto || data.username || username);
+        navigate(`/${ccSlug}`);
       } else {
         setError(data.message || 'Credenciales inválidas');
       }
@@ -75,7 +82,9 @@ export default function LoginPage({ params }: PageProps) {
   const handleBackToSelect = () => {
     localStorage.removeItem('selectedCCId');
     localStorage.removeItem('selectedCCName');
-    router.push('/');
+    localStorage.removeItem('selectedCCColor');
+    localStorage.removeItem('adminNombreCompleto');
+    navigate('/');
   };
 
   if (validatingCC) {
@@ -87,11 +96,22 @@ export default function LoginPage({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden font-sans"
+      style={{
+        background: `linear-gradient(135deg, var(--primary-color) 0%, color-mix(in srgb, var(--primary-color) 12%, #0f172a) 60%, #030712 100%)`
+      }}
+    >
       
       {/* Decorative subtle background accents */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-100/50 rounded-full blur-[100px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-50/50 rounded-full blur-[100px] pointer-events-none"></div>
+      <div 
+        className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[120px] pointer-events-none"
+        style={{ backgroundColor: 'var(--primary-color)', opacity: 0.12 }}
+      ></div>
+      <div 
+        className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full blur-[120px] pointer-events-none"
+        style={{ backgroundColor: 'var(--primary-color)', opacity: 0.12 }}
+      ></div>
 
       <div className="max-w-md w-full bg-white border border-slate-100 rounded-3xl shadow-[0_20px_50px_-20px_rgba(15,23,42,0.08)] overflow-hidden transition-all duration-300">
         
@@ -105,15 +125,28 @@ export default function LoginPage({ params }: PageProps) {
             <ArrowLeft size={18} />
           </button>
           
-          <div className="bg-blue-600 w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/10 text-white">
-            <Lock size={20} />
+          <div className="w-20 h-20 mx-auto mb-4 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden shrink-0">
+            {!logoError && ccLogo ? (
+              <img 
+                src={ccLogo} 
+                onError={() => setLogoError(true)}
+                className="w-full h-full object-cover" 
+                alt="Logo Sede" 
+              />
+            ) : (
+              <img 
+                src="/cctv-logo.svg" 
+                className="w-14 h-14 object-contain" 
+                alt="Logo CCTV" 
+              />
+            )}
           </div>
           
           <h1 className="text-xl font-extrabold text-slate-900">
             Iniciar Sesión
           </h1>
           
-          <div className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-100/60 px-3 py-1 rounded-full text-blue-600 font-bold text-xs mt-2.5">
+          <div className="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 px-3 py-1 rounded-full text-primary font-bold text-xs mt-2.5">
             <Landmark size={12} />
             {ccName}
           </div>
@@ -137,8 +170,8 @@ export default function LoginPage({ params }: PageProps) {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
-                  placeholder="Ej: admin_norte"
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm"
+                  placeholder="Ej: admin"
                 />
               </div>
             </div>
@@ -152,7 +185,7 @@ export default function LoginPage({ params }: PageProps) {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm"
                   placeholder="••••••••"
                 />
               </div>
@@ -162,7 +195,7 @@ export default function LoginPage({ params }: PageProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed shadow-lg shadow-blue-600/15 mt-8 cursor-pointer"
+            className="w-full bg-primary hover:bg-primary-hover text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-300 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed shadow-lg shadow-primary/15 mt-8 cursor-pointer"
           >
             {loading ? (
               <span className="flex items-center gap-2">

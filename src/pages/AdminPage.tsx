@@ -1,33 +1,59 @@
-'use client';
-
-import React, { useEffect, useState, use } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { FileSpreadsheet, Users, Clock, Search, ExternalLink, Calendar, Hash, FileText } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 
-interface PageProps {
-  params: Promise<{ ccSlug: string }>;
-}
-
-export default function AdminDashboard({ params }: PageProps) {
-  const { ccSlug } = use(params);
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export default function AdminPage() {
+  const { ccSlug } = useParams<{ ccSlug: string }>();
+  const navigate = useNavigate();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [ccName, setCcName] = useState('Sede');
-  const router = useRouter();
+  const [adminUsername, setAdminUsername] = useState('Administrador');
 
   useEffect(() => {
+    const savedColor = localStorage.getItem('selectedCCColor');
+    if (savedColor) {
+      document.documentElement.style.setProperty('--primary-color', savedColor);
+    }
+    setAdminUsername(localStorage.getItem('adminNombreCompleto') || localStorage.getItem('adminUsername') || 'Administrador');
+  }, []);
+
+  useEffect(() => {
+    if (!ccSlug) {
+      navigate('/');
+      return;
+    }
     const token = localStorage.getItem('adminToken');
     if (!token) {
-      router.push(`/${ccSlug}/login`);
+      navigate(`/${ccSlug}/login`);
       return;
     }
 
-    setCcName(localStorage.getItem('selectedCCName') || 'Sede');
-    fetchRecords(token);
-  }, [router, ccSlug]);
+    const validateCC = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/centros-comerciales/${ccSlug}`);
+        if (!response.ok) {
+          navigate('/');
+          return;
+        }
+        const data = await response.json();
+        setCcName(data.nombre);
+        localStorage.setItem('selectedCCId', data.id.toString());
+        localStorage.setItem('selectedCCName', data.nombre);
+        localStorage.setItem('selectedCCColor', data.color || '#3b82f6');
+        document.documentElement.style.setProperty('--primary-color', data.color || '#3b82f6');
+        fetchRecords(token);
+      } catch (e) {
+        console.error(e);
+        navigate('/');
+      }
+    };
+
+    validateCC();
+  }, [ccSlug]);
 
   const fetchRecords = async (token: string) => {
     try {
@@ -38,7 +64,7 @@ export default function AdminDashboard({ params }: PageProps) {
         const data = await response.json();
         setRecords(data);
       } else {
-        router.push(`/${ccSlug}/login`);
+        navigate(`/${ccSlug}/login`);
       }
     } catch (error) {
       console.error(error);
@@ -86,7 +112,7 @@ export default function AdminDashboard({ params }: PageProps) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-sans">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
           <p className="text-sm font-semibold tracking-wide">Cargando historial...</p>
         </div>
       </div>
@@ -105,7 +131,7 @@ export default function AdminDashboard({ params }: PageProps) {
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
       
       {/* Sidebar Navigation */}
-      <Sidebar username="Administrador" />
+      <Sidebar username={adminUsername} />
 
       {/* Main Content */}
       <main className="flex-1 p-4 sm:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
@@ -130,8 +156,8 @@ export default function AdminDashboard({ params }: PageProps) {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white border border-slate-200/70 p-6 rounded-2xl shadow-sm hover:border-blue-500/30 transition-all group">
-            <div className="text-blue-600 mb-4 bg-blue-50 border border-blue-100 w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
+          <div className="bg-white border border-slate-200/70 p-6 rounded-2xl shadow-sm hover:border-primary/30 transition-all group">
+            <div className="text-primary mb-4 bg-primary/10 border border-primary/20 w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
               <FileText size={18} />
             </div>
             <div className="text-2xl font-black text-slate-900">{records.length}</div>
@@ -171,7 +197,7 @@ export default function AdminDashboard({ params }: PageProps) {
                 placeholder="Buscar por visitante, cédula, OT..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-1 focus:ring-blue-600/10 transition-all outline-none"
+                className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
               />
             </div>
           </div>
@@ -208,7 +234,7 @@ export default function AdminDashboard({ params }: PageProps) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
                         {record.orden_trabajo ? (
-                          <span className="inline-flex items-center gap-1 bg-blue-50 border border-blue-100/60 px-2 py-0.5 rounded-md text-[10px] font-bold text-blue-600">
+                          <span className="inline-flex items-center gap-1 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md text-[10px] font-bold text-primary">
                             <Hash size={9} />
                             {record.orden_trabajo}
                           </span>
@@ -218,7 +244,7 @@ export default function AdminDashboard({ params }: PageProps) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs">
                         <span className={`inline-block px-2.5 py-0.5 rounded-md text-[10px] font-bold ${
-                          record.tipo_funcionario === 'SMO' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                          record.tipo_funcionario === 'SMO' ? 'bg-primary/10 text-primary border border-primary/20' :
                           record.tipo_funcionario === 'Proveedor' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
                           record.tipo_funcionario === 'EPS' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                           'bg-slate-50 text-slate-600 border border-slate-200'
@@ -234,7 +260,7 @@ export default function AdminDashboard({ params }: PageProps) {
                           href={record.pdf_url} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-bold bg-blue-50 border border-blue-100/50 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-[10px]"
+                          className="inline-flex items-center gap-1 text-primary hover:text-primary-hover font-bold bg-primary/10 border border-primary/20 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-[10px]"
                         >
                           Ver PDF <ExternalLink size={10} />
                         </a>

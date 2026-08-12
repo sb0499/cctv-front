@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary-color: #3b82f6;
+}
+
+@theme {
+  --color-primary: var(--primary-color);
+  --color-primary-hover: color-mix(in srgb, var(--primary-color) 85%, black);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Outfit', sans-serif;
+}

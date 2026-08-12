@@ -1,25 +1,24 @@
-'use client';
-
-import React, { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
-import { ShieldCheck, User, FileText, Send, CheckCircle2, AlertCircle, Calendar, Hash, Clock, Landmark } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ShieldCheck, User, FileText, Send, CheckCircle2, AlertCircle, Calendar, Hash, Clock } from 'lucide-react';
 import SignaturePad from '@/components/SignaturePad';
 import Sidebar from '@/components/Sidebar';
 
-interface PageProps {
-  params: Promise<{ ccSlug: string }>;
-}
-
-export default function RegistroIngresoPage({ params }: PageProps) {
-  const { ccSlug } = use(params);
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export default function RegistroIngresoPage() {
+  const { ccSlug } = useParams<{ ccSlug: string }>();
+  const navigate = useNavigate();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string>('');
   const [ccName, setCcName] = useState('');
-  const router = useRouter();
+
+  // Estados para el operador en sesión y autocompletado de visitante
+  const [adminUsername, setAdminUsername] = useState('Administrador');
+  const [searchingCedula, setSearchingCedula] = useState(false);
+  const [autoFilled, setAutoFilled] = useState(false);
 
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split('T')[0],
@@ -35,34 +34,130 @@ export default function RegistroIngresoPage({ params }: PageProps) {
     observaciones: '',
   });
 
+  // Cargar color del localStorage inmediatamente para evitar destellos
+  useEffect(() => {
+    const savedColor = localStorage.getItem('selectedCCColor');
+    if (savedColor) {
+      document.documentElement.style.setProperty('--primary-color', savedColor);
+    }
+  }, []);
+
   useEffect(() => {
     validateSession();
   }, [ccSlug]);
 
   const validateSession = async () => {
     try {
+      if (!ccSlug) {
+        navigate('/');
+        return;
+      }
       // 1. Validar que la sede exista en el backend
       const response = await fetch(`${API_URL}/api/centros-comerciales/${ccSlug}`);
       if (!response.ok) {
-        router.push('/');
+        navigate('/');
         return;
       }
       const ccData = await response.json();
       setCcName(ccData.nombre);
       localStorage.setItem('selectedCCId', ccData.id.toString());
       localStorage.setItem('selectedCCName', ccData.nombre);
+      localStorage.setItem('selectedCCColor', ccData.color || '#3b82f6');
+      document.documentElement.style.setProperty('--primary-color', ccData.color || '#3b82f6');
 
       // 2. Verificar que exista un token activo
       const token = localStorage.getItem('adminToken');
       if (!token) {
-        router.push(`/${ccSlug}/login`);
+        navigate(`/${ccSlug}/login`);
         return;
       }
+
+      // Pre-llenar operador
+      const fullName = localStorage.getItem('adminNombreCompleto') || localStorage.getItem('adminUsername') || 'Administrador';
+      setAdminUsername(fullName);
+      setFormData(prev => ({ ...prev, operador_cctv: fullName }));
 
       setCheckingAuth(false);
     } catch (e) {
       console.error(e);
-      router.push('/');
+      navigate('/');
+    }
+  };
+
+  // Efecto para buscar visitante por cédula con debounce de 600ms
+  useEffect(() => {
+    const cedula = formData.visitante_cedula.trim();
+    if (cedula.length < 5) {
+      setAutoFilled(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (autoFilled) return;
+
+      const checkCedulaDirect = async () => {
+        setSearchingCedula(true);
+        try {
+          const token = localStorage.getItem('adminToken');
+          const response = await fetch(`${API_URL}/api/visitantes/${cedula}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.found && data.visitante) {
+              setFormData(prev => ({
+                ...prev,
+                visitante_nombre: data.visitante.nombre,
+                tipo_funcionario: data.visitante.tipo_funcionario,
+                especificar_funcionario: data.visitante.especificar_funcionario || '',
+              }));
+              setAutoFilled(true);
+            }
+          }
+        } catch (err) {
+          console.error('Error al verificar cédula:', err);
+        } finally {
+          setSearchingCedula(false);
+        }
+      };
+
+      checkCedulaDirect();
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [formData.visitante_cedula]);
+
+  // Buscar también cuando pierda el foco por si no se disparó el debounce
+  const handleCedulaBlur = async () => {
+    const cedula = formData.visitante_cedula.trim();
+    if (cedula.length < 5 || autoFilled) return;
+
+    setSearchingCedula(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${API_URL}/api/visitantes/${cedula}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.found && data.visitante) {
+          setFormData(prev => ({
+            ...prev,
+            visitante_nombre: data.visitante.nombre,
+            tipo_funcionario: data.visitante.tipo_funcionario,
+            especificar_funcionario: data.visitante.especificar_funcionario || '',
+          }));
+          setAutoFilled(true);
+        }
+      }
+    } catch (err) {
+      console.error('Error al consultar cédula en blur:', err);
+    } finally {
+      setSearchingCedula(false);
     }
   };
 
@@ -100,7 +195,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
         setSuccess(`Registro guardado exitosamente.`);
         setFormData({
           fecha: new Date().toISOString().split('T')[0],
-          operador_cctv: '',
+          operador_cctv: localStorage.getItem('adminNombreCompleto') || localStorage.getItem('adminUsername') || '',
           orden_trabajo: '',
           visitante_nombre: '',
           visitante_cedula: '',
@@ -112,6 +207,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
           observaciones: '',
         });
         setSignature('');
+        setAutoFilled(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         setError(data.message || 'Error al guardar el registro.');
@@ -129,7 +225,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-sans">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
           <p className="text-sm font-semibold tracking-wide">Verificando sesión...</p>
         </div>
       </div>
@@ -140,7 +236,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
       
       {/* Sidebar Navigation */}
-      <Sidebar username="Administrador" />
+      <Sidebar username={adminUsername} />
 
       {/* Main Form Area */}
       <main className="flex-1 p-4 sm:p-8 overflow-y-auto max-w-5xl mx-auto w-full">
@@ -155,7 +251,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
               <p className="text-slate-500 text-sm mt-1">Completa los campos para registrar un nuevo reporte de actividad</p>
             </div>
             <div className="bg-white border border-slate-200 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-sm">
-              <Calendar className="text-blue-600" size={16} />
+              <Calendar className="text-primary" size={16} />
               <span className="text-xs font-bold text-slate-700">
                 {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
               </span>
@@ -193,16 +289,16 @@ export default function RegistroIngresoPage({ params }: PageProps) {
           {/* Card 1: Datos del Turno */}
           <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
+              <div className="bg-primary/10 p-2.5 rounded-xl text-primary border border-primary/20">
                 <ShieldCheck size={18} />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">Información General</h3>
-                <p className="text-xs text-slate-400">Datos principales del turno y orden de trabajo</p>
+                <p className="text-xs text-slate-400">Datos principales del turno y fecha de registro</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fecha</label>
                 <input
@@ -211,7 +307,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                   required
                   value={formData.fecha}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold"
                 />
               </div>
 
@@ -221,11 +317,82 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                   type="text"
                   name="operador_cctv"
                   required
+                  readOnly
                   placeholder="Nombre completo"
                   value={formData.operador_cctv}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed outline-none text-sm font-semibold"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Datos del Visitante */}
+          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
+              <div className="bg-primary/10 p-2.5 rounded-xl text-primary border border-primary/20">
+                <User size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Datos del Visitante / Funcionario</h3>
+                <p className="text-xs text-slate-400">Identificación y orden de trabajo del responsable del ingreso</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Documento / Cédula</label>
+                <input
+                  type="text"
+                  name="visitante_cedula"
+                  required
+                  placeholder="Ej: 10293847"
+                  value={formData.visitante_cedula}
+                  onChange={handleChange}
+                  onBlur={handleCedulaBlur}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold"
+                />
+                {searchingCedula && (
+                  <p className="text-[11px] text-primary font-semibold mt-1.5 animate-pulse">Buscando en base de datos...</p>
+                )}
+                {autoFilled && (
+                  <p className="text-[11px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
+                    <CheckCircle2 size={12} className="text-emerald-500" /> Datos recuperados del historial
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre Completo</label>
+                <input
+                  type="text"
+                  name="visitante_nombre"
+                  required
+                  placeholder="Ej: Carlos Mendoza"
+                  value={formData.visitante_nombre}
+                  onChange={(e) => {
+                    handleChange(e);
+                    if (autoFilled) setAutoFilled(false);
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo de Funcionario</label>
+                <select
+                  name="tipo_funcionario"
+                  value={formData.tipo_funcionario}
+                  onChange={(e) => {
+                    handleChange(e);
+                    if (autoFilled) setAutoFilled(false);
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold"
+                >
+                  <option value="SMO">SMO</option>
+                  <option value="EPS">EPS</option>
+                  <option value="Proveedor">Proveedor</option>
+                  <option value="Otros">Otros</option>
+                </select>
               </div>
 
               <div>
@@ -240,69 +407,13 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                     placeholder="Ej: OT-10293"
                     value={formData.orden_trabajo}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold text-blue-600"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold text-primary"
                   />
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Card 2: Datos del Visitante */}
-          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
-                <User size={18} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">Datos del Visitante / Funcionario</h3>
-                <p className="text-xs text-slate-400">Identificación del responsable del ingreso</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre Completo</label>
-                <input
-                  type="text"
-                  name="visitante_nombre"
-                  required
-                  placeholder="Ej: Carlos Mendoza"
-                  value={formData.visitante_nombre}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Documento / Cédula</label>
-                <input
-                  type="text"
-                  name="visitante_cedula"
-                  required
-                  placeholder="Ej: 10293847"
-                  value={formData.visitante_cedula}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo de Funcionario</label>
-                <select
-                  name="tipo_funcionario"
-                  value={formData.tipo_funcionario}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-bold"
-                >
-                  <option value="SMO">SMO</option>
-                  <option value="EPS">EPS</option>
-                  <option value="Proveedor">Proveedor</option>
-                  <option value="Otros">Otros</option>
-                </select>
-              </div>
 
               {(formData.tipo_funcionario === 'Proveedor' || formData.tipo_funcionario === 'Otros') && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="md:col-span-2 animate-in fade-in slide-in-from-top-2 duration-300">
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Especificar (Empresa/Entidad)</label>
                   <input
                     type="text"
@@ -310,8 +421,11 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                     required
                     placeholder="Ej: Sointech / Empresa Externa"
                     value={formData.especificar_funcionario}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm"
+                    onChange={(e) => {
+                      handleChange(e);
+                      if (autoFilled) setAutoFilled(false);
+                    }}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm"
                   />
                 </div>
               )}
@@ -321,7 +435,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
           {/* Card 3: Detalles del Trabajo */}
           <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-6">
-              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
+              <div className="bg-primary/10 p-2.5 rounded-xl text-primary border border-primary/20">
                 <FileText size={18} />
               </div>
               <div>
@@ -341,7 +455,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                   required
                   value={formData.hora_ingreso}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold"
                 />
               </div>
 
@@ -354,7 +468,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                   name="hora_salida"
                   value={formData.hora_salida}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm font-semibold"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold"
                 />
               </div>
             </div>
@@ -369,7 +483,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                   placeholder="Describa a detalle el motivo de las labores, áreas a intervenir y quién autoriza el procedimiento..."
                   value={formData.detalle_actividad_autorizacion}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm resize-none"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm resize-none"
                 />
               </div>
 
@@ -381,7 +495,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
                   placeholder="Incidencias, materiales utilizados u otra información relevante..."
                   value={formData.observaciones}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10 transition-all outline-none text-sm resize-none"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm resize-none"
                 />
               </div>
             </div>
@@ -390,7 +504,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
           {/* Card 4: Firma Digital */}
           <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
-              <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 border border-blue-100">
+              <div className="bg-primary/10 p-2.5 rounded-xl text-primary border border-primary/20">
                 <Send size={18} />
               </div>
               <div>
@@ -412,7 +526,7 @@ export default function RegistroIngresoPage({ params }: PageProps) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-10 py-4 rounded-xl shadow-md shadow-blue-500/10 flex items-center justify-center gap-2.5 transition-all duration-300 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full md:w-auto bg-primary hover:bg-primary-hover text-white font-bold text-sm px-10 py-4 rounded-xl shadow-md shadow-primary/10 flex items-center justify-center gap-2.5 transition-all duration-300 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
