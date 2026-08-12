@@ -4,6 +4,8 @@ import HomeSelectionPage from './pages/HomeSelectionPage';
 import RegistroIngresoPage from './pages/RegistroIngresoPage';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
+import UsuariosPage from './pages/UsuariosPage';
+import CentrosComercialesPage from './pages/CentrosComercialesPage';
 
 function App() {
   return (
@@ -13,6 +15,8 @@ function App() {
         <Route path="/:ccSlug" element={<RegistroIngresoPage />} />
         <Route path="/:ccSlug/login" element={<LoginPage />} />
         <Route path="/:ccSlug/admin" element={<AdminPage />} />
+        <Route path="/:ccSlug/usuarios" element={<UsuariosPage />} />
+        <Route path="/:ccSlug/centros" element={<CentrosComercialesPage />} />
       </Routes>
     </Router>
   );

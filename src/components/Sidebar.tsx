@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { FilePlus, History, LogOut, Menu, X, FileText, Landmark } from 'lucide-react';
+import { FilePlus, History, LogOut, Menu, X, FileText, Landmark, Users } from 'lucide-react';
 
 interface SidebarProps {
   username?: string;
@@ -28,24 +28,47 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminRol');
+    localStorage.removeItem('adminUsername');
+    localStorage.removeItem('adminNombreCompleto');
     localStorage.removeItem('selectedCCId');
     localStorage.removeItem('selectedCCName');
     localStorage.removeItem('selectedCCColor');
+    localStorage.removeItem('selectedCCLogo');
     navigate('/');
   };
 
+  const rol = localStorage.getItem('adminRol') || 'OPERADOR';
   const navItems = [
     {
       label: 'Nuevo Registro',
       path: `/${ccSlug}`,
       icon: FilePlus,
     },
-    {
+  ];
+
+  if (rol === 'ADMIN' || rol === 'SUPERVISOR') {
+    navItems.push({
       label: 'Historial',
       path: `/${ccSlug}/admin`,
       icon: History,
-    },
-  ];
+    });
+  }
+
+  if (rol === 'ADMIN') {
+    navItems.push(
+      {
+        label: 'Gestión Usuarios',
+        path: `/${ccSlug}/usuarios`,
+        icon: Users,
+      },
+      {
+        label: 'Gestión Sedes',
+        path: `/${ccSlug}/centros`,
+        icon: Landmark,
+      }
+    );
+  }
 
   return (
     <>

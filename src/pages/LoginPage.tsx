@@ -68,6 +68,7 @@ export default function LoginPage() {
         localStorage.setItem('adminToken', data.token);
         localStorage.setItem('adminUsername', data.username || username);
         localStorage.setItem('adminNombreCompleto', data.nombreCompleto || data.username || username);
+        localStorage.setItem('adminRol', data.rol || 'OPERADOR');
         navigate(`/${ccSlug}`);
       } else {
         setError(data.message || 'Credenciales inválidas');

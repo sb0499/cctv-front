@@ -32,6 +32,12 @@ export default function AdminPage() {
       return;
     }
 
+    const rol = localStorage.getItem('adminRol');
+    if (rol === 'OPERADOR') {
+      navigate(`/${ccSlug}`);
+      return;
+    }
+
     const validateCC = async () => {
       try {
         const response = await fetch(`${API_URL}/api/centros-comerciales/${ccSlug}`);
