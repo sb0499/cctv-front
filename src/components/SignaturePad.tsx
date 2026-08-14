@@ -10,25 +10,34 @@ export default function SignaturePad({ onSave, onClear }: SignaturePadProps) {
   const sigCanvas = useRef<SignatureCanvas>(null);
 
   useEffect(() => {
-    const handleResize = () => {
-      const canvas = sigCanvas.current?.getCanvas();
-      if (canvas && canvas.parentElement) {
-        const temp = sigCanvas.current?.isEmpty() ? null : sigCanvas.current?.toDataURL();
-        canvas.width = canvas.parentElement.clientWidth;
-        canvas.height = canvas.parentElement.clientHeight || 192;
-        sigCanvas.current?.clear();
-        if (temp) {
-          sigCanvas.current?.fromDataURL(temp);
+    const canvas = sigCanvas.current?.getCanvas();
+    if (!canvas || !canvas.parentElement) return;
+
+    const parent = canvas.parentElement;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        const { width, height } = entry.contentRect;
+        // Solo redimensionar si el contenedor tiene un ancho real y visible
+        if (width > 0) {
+          const temp = sigCanvas.current?.isEmpty() ? null : sigCanvas.current?.toDataURL();
+          
+          // Establecer dimensiones reales del buffer de dibujo
+          canvas.width = width;
+          canvas.height = height || 192;
+          
+          sigCanvas.current?.clear();
+          if (temp) {
+            sigCanvas.current?.fromDataURL(temp);
+          }
         }
       }
-    };
+    });
 
-    // Wait a brief frame for parent element layout to calculate dimensions
-    const timer = setTimeout(handleResize, 100);
-    window.addEventListener('resize', handleResize);
+    resizeObserver.observe(parent);
+
     return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
     };
   }, []);
 
@@ -41,7 +50,8 @@ export default function SignaturePad({ onSave, onClear }: SignaturePadProps) {
     if (sigCanvas.current?.isEmpty()) {
       return;
     }
-    const dataURL = sigCanvas.current?.getTrimmedCanvas().toDataURL('image/png');
+    const canvas = sigCanvas.current?.getCanvas();
+    const dataURL = canvas?.toDataURL('image/png');
     if (dataURL) {
       onSave(dataURL);
     }

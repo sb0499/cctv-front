@@ -1,8 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, User, FileText, Send, CheckCircle2, AlertCircle, Calendar, Hash, Clock } from 'lucide-react';
-import SignaturePad from '@/components/SignaturePad';
 import Sidebar from '@/components/Sidebar';
+
+const validarDocumento = (doc: string): { valido: boolean; tipo: 'cedula' | 'pasaporte' | 'invalido'; mensaje: string; enProgreso?: boolean } => {
+  const cleanDoc = doc.trim();
+  if (cleanDoc.length === 0) {
+    return { valido: false, tipo: 'invalido', mensaje: '' };
+  }
+  
+  const soloNumeros = /^\d+$/.test(cleanDoc);
+  
+  if (soloNumeros) {
+    if (cleanDoc.length === 10) {
+      const provincia = parseInt(cleanDoc.substring(0, 2), 10);
+      if (provincia < 1 || (provincia > 24 && provincia !== 30)) {
+        return { valido: false, tipo: 'cedula', mensaje: 'Cédula ecuatoriana inválida (provincia incorrecta)' };
+      }
+      
+      const tercerDigito = parseInt(cleanDoc.charAt(2), 10);
+      if (tercerDigito > 5) {
+        return { valido: false, tipo: 'cedula', mensaje: 'Cédula ecuatoriana inválida' };
+      }
+      
+      const coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+      let suma = 0;
+      for (let i = 0; i < 9; i++) {
+        let valor = parseInt(cleanDoc.charAt(i), 10) * coeficientes[i];
+        if (valor >= 10) {
+          valor -= 9;
+        }
+        suma += valor;
+      }
+      
+      const verificador = parseInt(cleanDoc.charAt(9), 10);
+      const residuo = suma % 10;
+      const digitoVerificadorCalculado = residuo === 0 ? 0 : 10 - residuo;
+      
+      if (verificador === digitoVerificadorCalculado) {
+        return { valido: true, tipo: 'cedula', mensaje: 'Cédula ecuatoriana válida' };
+      } else {
+        return { valido: false, tipo: 'cedula', mensaje: 'Cédula ecuatoriana inválida' };
+      }
+    } else {
+      if (cleanDoc.length > 10) {
+        return { valido: false, tipo: 'invalido', mensaje: 'La cédula debe tener un máximo de 10 dígitos' };
+      } else {
+        return { valido: false, tipo: 'invalido', mensaje: 'Cédula incompleta (debe tener 10 dígitos)', enProgreso: true };
+      }
+    }
+  } else {
+    // Si contiene letras, se asume pasaporte y se permiten hasta 15 caracteres
+    const esAlfanumerico = /^[a-zA-Z0-9]+$/.test(cleanDoc);
+    if (esAlfanumerico && cleanDoc.length >= 5 && cleanDoc.length <= 15) {
+      return { valido: true, tipo: 'pasaporte', mensaje: 'Pasaporte/ID Extranjero válido' };
+    } else {
+      return { valido: false, tipo: 'invalido', mensaje: 'El pasaporte debe ser alfanumérico y tener entre 5 y 15 caracteres' };
+    }
+  }
+};
 
 export default function RegistroIngresoPage() {
   const { ccSlug } = useParams<{ ccSlug: string }>();
@@ -12,7 +68,6 @@ export default function RegistroIngresoPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [signature, setSignature] = useState<string>('');
   const [ccName, setCcName] = useState('');
 
   // Estados para el operador en sesión y autocompletado de visitante
@@ -45,6 +100,17 @@ export default function RegistroIngresoPage() {
   useEffect(() => {
     validateSession();
   }, [ccSlug]);
+
+  // Reloj en tiempo real para mantener la hora de ingreso actualizada al sistema
+  useEffect(() => {
+    const updateTime = () => {
+      const currentHHMM = new Date().toTimeString().split(' ')[0].substring(0, 5);
+      setFormData(prev => ({ ...prev, hora_ingreso: currentHHMM }));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const validateSession = async () => {
     try {
@@ -163,14 +229,28 @@ export default function RegistroIngresoPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'visitante_cedula') {
+        updated.visitante_nombre = '';
+        updated.tipo_funcionario = 'SMO';
+        updated.especificar_funcionario = '';
+      }
+      return updated;
+    });
+    if (name === 'visitante_cedula') {
+      setAutoFilled(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signature) {
-      setError('La firma es obligatoria.');
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+    // Validar cédula ecuatoriana o pasaporte
+    const docValidation = validarDocumento(formData.visitante_cedula);
+    if (!docValidation.valido) {
+      setError(docValidation.mensaje || 'El documento ingresado no es válido.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -186,7 +266,7 @@ export default function RegistroIngresoPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ ...formData, firmaBase64: signature }),
+        body: JSON.stringify(formData),
       });
 
       const data = await response.json();
@@ -206,7 +286,6 @@ export default function RegistroIngresoPage() {
           detalle_actividad_autorizacion: '',
           observaciones: '',
         });
-        setSignature('');
         setAutoFilled(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
@@ -305,9 +384,9 @@ export default function RegistroIngresoPage() {
                   type="date"
                   name="fecha"
                   required
+                  readOnly
                   value={formData.fecha}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold"
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed outline-none text-sm font-semibold"
                 />
               </div>
 
@@ -354,10 +433,31 @@ export default function RegistroIngresoPage() {
                 {searchingCedula && (
                   <p className="text-[11px] text-primary font-semibold mt-1.5 animate-pulse">Buscando en base de datos...</p>
                 )}
-                {autoFilled && (
-                  <p className="text-[11px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
-                    <CheckCircle2 size={12} className="text-emerald-500" /> Datos recuperados del historial
-                  </p>
+                {!searchingCedula && formData.visitante_cedula.trim().length >= 5 && (
+                  (() => {
+                    const validation = validarDocumento(formData.visitante_cedula);
+                    if (!validation.valido) {
+                      return (
+                        <p className={`text-[11px] font-semibold mt-1.5 flex items-center gap-1 ${
+                          validation.enProgreso ? 'text-slate-400' : 'text-rose-600'
+                        }`}>
+                          <AlertCircle size={12} className={validation.enProgreso ? 'text-slate-400' : 'text-rose-500'} /> {validation.mensaje}
+                        </p>
+                      );
+                    }
+                    if (autoFilled) {
+                      return (
+                        <p className="text-[11px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
+                          <CheckCircle2 size={12} className="text-emerald-500" /> Datos recuperados del historial
+                        </p>
+                      );
+                    }
+                    return (
+                      <p className="text-[11px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
+                        <CheckCircle2 size={12} className="text-emerald-500" /> {validation.mensaje}
+                      </p>
+                    );
+                  })()
                 )}
               </div>
 
@@ -367,13 +467,15 @@ export default function RegistroIngresoPage() {
                   type="text"
                   name="visitante_nombre"
                   required
+                  readOnly={autoFilled}
                   placeholder="Ej: Carlos Mendoza"
                   value={formData.visitante_nombre}
-                  onChange={(e) => {
-                    handleChange(e);
-                    if (autoFilled) setAutoFilled(false);
-                  }}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm"
+                  onChange={handleChange}
+                  className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none text-sm transition-all ${
+                    autoFilled 
+                      ? 'bg-slate-100 text-slate-500 cursor-not-allowed' 
+                      : 'bg-slate-50 text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10'
+                  }`}
                 />
               </div>
 
@@ -439,8 +541,12 @@ export default function RegistroIngresoPage() {
                 <FileText size={18} />
               </div>
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">Actividad y Horarios</h3>
-                <p className="text-xs text-slate-400">Detalles técnicos del trabajo a realizar</p>
+                <h3 className="font-bold text-slate-900 text-sm">
+                  Actividad y Horario
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Detalles técnicos del trabajo a realizar
+                </p>
               </div>
             </div>
 
@@ -453,29 +559,18 @@ export default function RegistroIngresoPage() {
                   type="time"
                   name="hora_ingreso"
                   required
+                  readOnly
                   value={formData.hora_ingreso}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <Clock size={14} className="text-slate-400" /> Hora de Salida <span className="text-[10px] text-slate-400 font-medium lowercase tracking-normal">(opcional)</span>
-                </label>
-                <input
-                  type="time"
-                  name="hora_salida"
-                  value={formData.hora_salida}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold"
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed outline-none text-sm font-semibold"
                 />
               </div>
             </div>
 
             <div className="space-y-6">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Detalle de Actividad / Autorización</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Detalle de Actividad / Autorización
+                </label>
                 <textarea
                   name="detalle_actividad_autorizacion"
                   required
@@ -486,38 +581,6 @@ export default function RegistroIngresoPage() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm resize-none"
                 />
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Observaciones <span className="text-[10px] text-slate-400 font-medium lowercase tracking-normal">(opcional)</span></label>
-                <textarea
-                  name="observaciones"
-                  rows={2}
-                  placeholder="Incidencias, materiales utilizados u otra información relevante..."
-                  value={formData.observaciones}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm resize-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Firma Digital */}
-          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
-              <div className="bg-primary/10 p-2.5 rounded-xl text-primary border border-primary/20">
-                <Send size={18} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">Firma de Conformidad</h3>
-                <p className="text-xs text-slate-400">Es indispensable que el visitante dibuje su firma digital</p>
-              </div>
-            </div>
-
-            <div className="p-2 bg-slate-50 rounded-2xl border border-slate-200/80">
-              <SignaturePad 
-                onSave={(data) => setSignature(data)} 
-                onClear={() => setSignature('')} 
-              />
             </div>
           </div>
 

@@ -45,6 +45,11 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
       path: `/${ccSlug}`,
       icon: FilePlus,
     },
+    {
+      label: 'Registrar Salida',
+      path: `/${ccSlug}/salida`,
+      icon: LogOut,
+    }
   ];
 
   if (rol === 'ADMIN' || rol === 'SUPERVISOR') {

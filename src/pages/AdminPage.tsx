@@ -221,6 +221,7 @@ export default function AdminPage() {
                   <tr>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Fecha / Hora</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Visitante</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Estado</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Orden Trabajo</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Funcionario</th>
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actividad</th>
@@ -237,6 +238,15 @@ export default function AdminPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="font-extrabold text-slate-800 text-xs">{record.visitante_nombre}</div>
                         <div className="text-[10px] text-slate-400 mt-0.5">CC: {record.visitante_cedula}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider border ${
+                          record.estado === 'ABIERTO' 
+                            ? 'bg-amber-100 text-amber-800 border-amber-200' 
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {record.estado || 'ABIERTO'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
                         {record.orden_trabajo ? (
@@ -262,14 +272,20 @@ export default function AdminPage() {
                         {record.detalle_actividad_autorizacion}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
-                        <a 
-                          href={record.pdf_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary hover:text-primary-hover font-bold bg-primary/10 border border-primary/20 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-[10px]"
-                        >
-                          Ver PDF <ExternalLink size={10} />
-                        </a>
+                        {record.estado === 'CERRADO' && record.pdf_url ? (
+                          <a 
+                            href={record.pdf_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:text-primary-hover font-bold bg-primary/10 border border-primary/20 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-[10px]"
+                          >
+                            Ver PDF <ExternalLink size={10} />
+                          </a>
+                        ) : (
+                          <span className="text-amber-600 font-bold text-[10px] px-2.5 py-1.5 bg-amber-50 border border-amber-100 rounded-lg">
+                            En Curso
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
