@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Users, Clock, Search, ExternalLink, Calendar, Hash, FileText } from 'lucide-react';
+import { FileSpreadsheet, Users, Clock, Search, ExternalLink, Calendar, Hash, FileText, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
+
+const PAGE_SIZE = 15;
 
 export default function AdminPage() {
   const { ccSlug } = useParams<{ ccSlug: string }>();
@@ -10,6 +12,9 @@ export default function AdminPage() {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [ccName, setCcName] = useState('Sede');
   const [adminUsername, setAdminUsername] = useState('Administrador');
 
@@ -61,6 +66,11 @@ export default function AdminPage() {
     validateCC();
   }, [ccSlug]);
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, fechaDesde, fechaHasta]);
+
   const fetchRecords = async (token: string) => {
     try {
       const response = await fetch(`${API_URL}/api/admin/ingresos`, {
@@ -101,10 +111,16 @@ export default function AdminPage() {
     }
   };
 
-  // Client-side search logic
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
+  // Client-side filter: text search + date range
   const filteredRecords = records.filter(record => {
     const searchLower = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       record.visitante_nombre.toLowerCase().includes(searchLower) ||
       record.visitante_cedula.toLowerCase().includes(searchLower) ||
       record.operador_cctv.toLowerCase().includes(searchLower) ||
@@ -112,7 +128,23 @@ export default function AdminPage() {
       record.tipo_funcionario.toLowerCase().includes(searchLower) ||
       (record.detalle_actividad_autorizacion && record.detalle_actividad_autorizacion.toLowerCase().includes(searchLower))
     );
+
+    // Date range filter — compare YYYY-MM-DD strings
+    const recordDateStr = record.fecha ? new Date(record.fecha).toISOString().split('T')[0] : '';
+    const matchesFechaDesde = fechaDesde ? recordDateStr >= fechaDesde : true;
+    const matchesFechaHasta = fechaHasta ? recordDateStr <= fechaHasta : true;
+
+    return matchesSearch && matchesFechaDesde && matchesFechaHasta;
   });
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
+  const paginatedRecords = filteredRecords.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  const hasActiveFilters = searchTerm || fechaDesde || fechaHasta;
 
   if (loading) {
     return (
@@ -191,20 +223,62 @@ export default function AdminPage() {
         <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm overflow-hidden">
           
           {/* Table Utilities */}
-          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 bg-slate-50/50">
-            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <span>Listado de Actividades</span>
-              <span className="bg-slate-200 text-slate-600 text-xs px-2.5 py-0.5 rounded-full font-bold">{filteredRecords.length}</span>
-            </h3>
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
-                type="text" 
-                placeholder="Buscar por visitante, cédula, OT..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
-              />
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <span>Listado de Actividades</span>
+                <span className="bg-slate-200 text-slate-600 text-xs px-2.5 py-0.5 rounded-full font-bold">{filteredRecords.length}</span>
+                {hasActiveFilters && (
+                  <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-bold border border-primary/20">
+                    Filtrado
+                  </span>
+                )}
+              </h3>
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar por visitante, cédula, OT..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Date Range Filters */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 shrink-0">
+                <Calendar size={14} /> Filtrar por fecha:
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-slate-400 font-semibold">Desde</label>
+                  <input
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:bg-white focus:border-primary outline-none transition-all font-semibold"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] text-slate-400 font-semibold">Hasta</label>
+                  <input
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:bg-white focus:border-primary outline-none transition-all font-semibold"
+                  />
+                </div>
+                {hasActiveFilters && (
+                  <button
+                    onClick={handleClearFilters}
+                    className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-lg text-xs font-bold hover:bg-rose-100 transition-colors cursor-pointer"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -213,7 +287,12 @@ export default function AdminPage() {
             {filteredRecords.length === 0 ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
                 <Search size={28} className="text-slate-300" />
-                <p className="text-xs font-bold">No se encontraron registros que coincidan con la búsqueda.</p>
+                <p className="text-xs font-bold">No se encontraron registros que coincidan con los filtros aplicados.</p>
+                {hasActiveFilters && (
+                  <button onClick={handleClearFilters} className="text-primary text-xs font-bold hover:underline">
+                    Limpiar filtros
+                  </button>
+                )}
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
@@ -229,7 +308,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredRecords.map((record) => (
+                  {paginatedRecords.map((record) => (
                     <tr key={record.id} className="hover:bg-slate-50/50 transition-colors duration-150">
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">
                         <div className="font-bold text-slate-800">{record.fecha ? new Date(record.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : ''}</div>
@@ -241,8 +320,8 @@ export default function AdminPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider border ${
-                          record.estado === 'ABIERTO' 
-                            ? 'bg-amber-100 text-amber-800 border-amber-200' 
+                          record.estado === 'ABIERTO'
+                            ? 'bg-amber-100 text-amber-800 border-amber-200'
                             : 'bg-slate-100 text-slate-600 border-slate-200'
                         }`}>
                           {record.estado || 'ABIERTO'}
@@ -272,18 +351,26 @@ export default function AdminPage() {
                         {record.detalle_actividad_autorizacion}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-xs">
-                        {record.estado === 'CERRADO' && record.pdf_url ? (
-                          <a 
-                            href={record.pdf_url} 
-                            target="_blank" 
+                        {record.estado === 'ABIERTO' ? (
+                          <span className="text-amber-600 font-bold text-[10px] px-2.5 py-1.5 bg-amber-50 border border-amber-100 rounded-lg">
+                            En Curso
+                          </span>
+                        ) : record.pdf_url ? (
+                          <a
+                            href={record.pdf_url}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-primary hover:text-primary-hover font-bold bg-primary/10 border border-primary/20 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-[10px]"
                           >
                             Ver PDF <ExternalLink size={10} />
                           </a>
                         ) : (
-                          <span className="text-amber-600 font-bold text-[10px] px-2.5 py-1.5 bg-amber-50 border border-amber-100 rounded-lg">
-                            En Curso
+                          <span
+                            className="inline-flex items-center gap-1 text-slate-400 font-bold text-[10px] px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg"
+                            title="Registro migrado desde sistema anterior — sin firma digital disponible"
+                          >
+                            <AlertCircle size={10} />
+                            Sin PDF · Migrado
                           </span>
                         )}
                       </td>
@@ -293,6 +380,37 @@ export default function AdminPage() {
               </table>
             )}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/30">
+              <p className="text-xs text-slate-500 font-semibold">
+                Mostrando{' '}
+                <span className="font-bold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRecords.length)}</span>
+                {' '}de{' '}
+                <span className="font-bold text-slate-700">{filteredRecords.length}</span> registros
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  <ChevronLeft size={14} /> Anterior
+                </button>
+                <span className="px-3 py-2 text-xs font-bold text-slate-700 bg-primary/5 border border-primary/20 rounded-xl">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  Siguiente <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

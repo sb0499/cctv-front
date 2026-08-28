@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Search, Clock, ShieldCheck, User, FileText, Send, CheckCircle2, AlertCircle, Calendar, X, Download } from 'lucide-react';
+import { LogOut, Search, Clock, ShieldCheck, User, FileText, Send, CheckCircle2, AlertCircle, Calendar, X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import SignaturePad from '@/components/SignaturePad';
 import Sidebar from '@/components/Sidebar';
 
@@ -22,6 +22,10 @@ interface Registro {
   estado: 'ABIERTO' | 'CERRADO';
 }
 
+type StatusTab = 'ABIERTO' | 'CERRADO' | 'TODOS';
+
+const PAGE_SIZE = 10;
+
 export default function RegistrarSalidaPage() {
   const { ccSlug } = useParams<{ ccSlug: string }>();
   const navigate = useNavigate();
@@ -31,6 +35,8 @@ export default function RegistrarSalidaPage() {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<Registro[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<StatusTab>('ABIERTO');
+  const [currentPage, setCurrentPage] = useState(1);
   const [ccName, setCcName] = useState('');
   const [adminUsername, setAdminUsername] = useState('Administrador');
 
@@ -53,6 +59,11 @@ export default function RegistrarSalidaPage() {
   useEffect(() => {
     validateSession();
   }, [ccSlug]);
+
+  // Reset to page 1 when search or tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
 
   const validateSession = async () => {
     try {
@@ -105,13 +116,33 @@ export default function RegistrarSalidaPage() {
     }
   };
 
-  const filteredRecords = records.filter(record => {
+  // Count by status for tab badges
+  const countByStatus = {
+    ABIERTO: records.filter(r => r.estado === 'ABIERTO').length,
+    CERRADO: records.filter(r => r.estado === 'CERRADO').length,
+    TODOS: records.length,
+  };
+
+  // Apply tab filter first, then search filter
+  const tabFiltered = records.filter(record => {
+    if (activeTab === 'TODOS') return true;
+    return record.estado === activeTab;
+  });
+
+  const filteredRecords = tabFiltered.filter(record => {
     const searchLower = searchTerm.toLowerCase();
     return (
       record.visitante_nombre.toLowerCase().includes(searchLower) ||
       record.visitante_cedula.includes(searchLower)
     );
   });
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
+  const paginatedRecords = filteredRecords.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const openSalidaModal = (record: Registro) => {
     setSelectedRecord(record);
@@ -176,6 +207,12 @@ export default function RegistrarSalidaPage() {
     );
   }
 
+  const tabs: { key: StatusTab; label: string; color: string; activeColor: string }[] = [
+    { key: 'ABIERTO',  label: 'Activos',  color: 'text-amber-600 border-amber-200 bg-amber-50', activeColor: 'bg-amber-500 text-white border-amber-500' },
+    { key: 'CERRADO',  label: 'Cerrados', color: 'text-slate-500 border-slate-200 bg-white',    activeColor: 'bg-slate-700 text-white border-slate-700' },
+    { key: 'TODOS',    label: 'Todos',    color: 'text-primary border-primary/20 bg-primary/5', activeColor: 'bg-primary text-white border-primary' },
+  ];
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
       <Sidebar username={adminUsername} />
@@ -196,7 +233,8 @@ export default function RegistrarSalidaPage() {
           </div>
         </header>
 
-        <div className="mb-6">
+        {/* Search + Tabs */}
+        <div className="mb-6 space-y-4">
           <div className="relative max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
@@ -207,6 +245,26 @@ export default function RegistrarSalidaPage() {
               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold shadow-sm"
             />
           </div>
+
+          {/* Status Tabs */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all duration-200 cursor-pointer ${
+                  activeTab === tab.key ? tab.activeColor : tab.color
+                }`}
+              >
+                {tab.label}
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold ${
+                  activeTab === tab.key ? 'bg-white/25' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {countByStatus[tab.key]}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
@@ -216,58 +274,60 @@ export default function RegistrarSalidaPage() {
         ) : filteredRecords.length === 0 ? (
           <div className="bg-white border border-slate-200/70 p-12 text-center text-slate-400 flex flex-col items-center gap-3 rounded-2xl shadow-sm">
             <Search size={32} className="text-slate-300" />
-            <p className="text-sm font-bold">No se encontraron registros de visitas.</p>
+            <p className="text-sm font-bold">
+              {activeTab === 'ABIERTO' ? 'No hay visitas activas en este momento.' : 'No se encontraron registros.'}
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {filteredRecords.map((record) => (
-              <div 
-                key={record.id} 
-                className={`bg-white border transition-all p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
-                  record.estado === 'ABIERTO' ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="text-xs font-bold text-slate-500">
-                      {new Date(record.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider border ${
-                      record.estado === 'ABIERTO' 
-                        ? 'bg-amber-100 text-amber-800 border-amber-200' 
-                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}>
-                      {record.estado}
-                    </span>
-                    {record.orden_trabajo && (
-                      <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[9px] font-bold">
-                        OT: {record.orden_trabajo}
+          <>
+            <div className="grid grid-cols-1 gap-4">
+              {paginatedRecords.map((record) => (
+                <div
+                  key={record.id}
+                  className={`bg-white border transition-all p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
+                    record.estado === 'ABIERTO' ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-500">
+                        {new Date(record.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                       </span>
-                    )}
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider border ${
+                        record.estado === 'ABIERTO'
+                          ? 'bg-amber-100 text-amber-800 border-amber-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}>
+                        {record.estado}
+                      </span>
+                      {record.orden_trabajo && (
+                        <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[9px] font-bold">
+                          OT: {record.orden_trabajo}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 text-sm">{record.visitante_nombre}</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Cédula: <span className="font-semibold text-slate-700">{record.visitante_cedula}</span></p>
+                    </div>
+                    <div className="flex items-center gap-4 text-[11px] text-slate-400 font-semibold mt-1">
+                      <span className="flex items-center gap-1"><Clock size={12} /> Ingreso: {record.hora_ingreso}</span>
+                      {record.hora_salida && (
+                        <span className="flex items-center gap-1"><Clock size={12} /> Salida: {record.hora_salida}</span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-extrabold text-slate-900 text-sm">{record.visitante_nombre}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Cédula: <span className="font-semibold text-slate-700">{record.visitante_cedula}</span></p>
-                  </div>
-                  <div className="flex items-center gap-4 text-[11px] text-slate-400 font-semibold mt-1">
-                    <span className="flex items-center gap-1"><Clock size={12} /> Ingreso: {record.hora_ingreso}</span>
-                    {record.hora_salida && (
-                      <span className="flex items-center gap-1"><Clock size={12} /> Salida: {record.hora_salida}</span>
-                    )}
-                  </div>
-                </div>
 
-                <div className="shrink-0 w-full sm:w-auto">
-                  {record.estado === 'ABIERTO' ? (
-                    <button
-                      onClick={() => openSalidaModal(record)}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
-                    >
-                      <LogOut size={14} />
-                      Registrar Salida
-                    </button>
-                  ) : (
-                    record.pdf_url && (
+                  <div className="shrink-0 w-full sm:w-auto">
+                    {record.estado === 'ABIERTO' ? (
+                      <button
+                        onClick={() => openSalidaModal(record)}
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
+                      >
+                        <LogOut size={14} />
+                        Registrar Salida
+                      </button>
+                    ) : record.pdf_url ? (
                       <a
                         href={record.pdf_url}
                         target="_blank"
@@ -277,12 +337,48 @@ export default function RegistrarSalidaPage() {
                         <FileText size={14} />
                         Descargar PDF
                       </a>
-                    )
-                  )}
+                    ) : (
+                      <span
+                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-slate-400 font-bold text-[10px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                        title="Este registro fue migrado desde el sistema anterior y no tiene PDF generado"
+                      >
+                        <FileText size={12} />
+                        Sin PDF · Migrado
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
+                <p className="text-xs text-slate-500 font-semibold">
+                  Mostrando <span className="font-bold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRecords.length)}</span> de <span className="font-bold text-slate-700">{filteredRecords.length}</span> registros
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  >
+                    <ChevronLeft size={14} /> Anterior
+                  </button>
+                  <span className="px-3 py-2 text-xs font-bold text-slate-700 bg-primary/5 border border-primary/20 rounded-xl">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  >
+                    Siguiente <ChevronRight size={14} />
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </main>
 
@@ -297,7 +393,7 @@ export default function RegistrarSalidaPage() {
                 <h3 className="font-extrabold text-base">Registrar Salida de Visitante</h3>
                 <p className="text-[11px] text-white/70 mt-0.5">Completa observaciones y firma para finalizar el registro</p>
               </div>
-              <button 
+              <button
                 onClick={closeSalidaModal}
                 disabled={modalLoading}
                 className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-colors cursor-pointer"

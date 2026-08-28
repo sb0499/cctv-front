@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UserPlus, Search, Edit2, Trash2, Key, AlertCircle, CheckCircle2, Shield, Landmark } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, Key, AlertCircle, CheckCircle2, Shield, Landmark, ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
+
+const PAGE_SIZE = 10;
 
 export default function UsuariosPage() {
   const { ccSlug } = useParams<{ ccSlug: string }>();
@@ -12,6 +14,7 @@ export default function UsuariosPage() {
   const [malls, setMalls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [ccName, setCcName] = useState('Sede');
   const [adminUsername, setAdminUsername] = useState('Administrador');
 
@@ -84,6 +87,11 @@ export default function UsuariosPage() {
 
     loadData();
   }, [ccSlug]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const fetchUsers = async (token: string) => {
     try {
@@ -182,8 +190,8 @@ export default function UsuariosPage() {
     }
 
     const token = localStorage.getItem('adminToken');
-    const url = modalMode === 'create' 
-      ? `${API_URL}/api/admin/usuarios` 
+    const url = modalMode === 'create'
+      ? `${API_URL}/api/admin/usuarios`
       : `${API_URL}/api/admin/usuarios/${selectedUserId}`;
     
     const method = modalMode === 'create' ? 'POST' : 'PUT';
@@ -261,6 +269,13 @@ export default function UsuariosPage() {
     );
   });
 
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-sans">
@@ -320,9 +335,9 @@ export default function UsuariosPage() {
             </h3>
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
-                type="text" 
-                placeholder="Buscar por nombre, usuario, sede..." 
+              <input
+                type="text"
+                placeholder="Buscar por nombre, usuario, sede..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
@@ -342,8 +357,8 @@ export default function UsuariosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => (
+                {paginatedUsers.length > 0 ? (
+                  paginatedUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-slate-50/30 transition-colors group">
                       <td className="px-6 py-4 font-bold text-slate-900">
                         {user.nombre_completo}
@@ -359,8 +374,8 @@ export default function UsuariosPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase ${
-                          user.rol === 'ADMIN' 
-                            ? 'bg-purple-50 text-purple-700 border border-purple-100' 
+                          user.rol === 'ADMIN'
+                            ? 'bg-purple-50 text-purple-700 border border-purple-100'
                             : user.rol === 'SUPERVISOR'
                             ? 'bg-blue-50 text-blue-700 border border-blue-100'
                             : 'bg-slate-50 text-slate-600 border border-slate-100'
@@ -399,6 +414,37 @@ export default function UsuariosPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/30">
+              <p className="text-xs text-slate-500 font-semibold">
+                Mostrando{' '}
+                <span className="font-bold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredUsers.length)}</span>
+                {' '}de{' '}
+                <span className="font-bold text-slate-700">{filteredUsers.length}</span> usuarios
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  <ChevronLeft size={14} /> Anterior
+                </button>
+                <span className="px-3 py-2 text-xs font-bold text-slate-700 bg-primary/5 border border-primary/20 rounded-xl">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  Siguiente <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

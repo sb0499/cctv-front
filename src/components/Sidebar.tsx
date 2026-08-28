@@ -99,14 +99,19 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar Drawer */}
+      {/* Sidebar Drawer
+          - Mobile: fixed overlay drawer (full height, independent of content)
+          - Desktop: sticky, h-screen, flex-col so logout is always at bottom.
+            The nav section is overflow-y-auto so it scrolls internally if there
+            are many menu items, without the page needing to scroll.
+      */}
       <aside
-        className={`fixed md:sticky top-0 left-0 bottom-0 w-64 bg-white border-r border-slate-100 text-slate-800 flex flex-col p-6 z-50 md:z-10 transition-transform duration-300 md:translate-x-0 ${
+        className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-100 text-slate-800 flex flex-col p-6 z-50 md:z-10 transition-transform duration-300 md:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo and Brand */}
-        <div className="flex items-center gap-3 mb-8 pb-6 border-b border-slate-100">
+        <div className="flex items-center gap-3 mb-8 pb-6 border-b border-slate-100 shrink-0">
           <img src="/cctv-logo.svg" alt="Logo CCTV" className="w-10 h-10 drop-shadow-sm shrink-0" />
           <div className="flex flex-col">
             <span className="text-sm font-extrabold tracking-wide leading-none text-slate-900">REGISTRO</span>
@@ -114,14 +119,14 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
           </div>
         </div>
 
-        <div className="mb-6 px-4 py-3 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-3">
+        <div className="mb-6 px-4 py-3 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-3 shrink-0">
           <div className="bg-primary/10 w-9 h-9 rounded-xl text-primary flex items-center justify-center overflow-hidden border border-primary/10 shrink-0">
             {!logoError && ccLogo ? (
-              <img 
-                src={ccLogo} 
+              <img
+                src={ccLogo}
                 onError={() => setLogoError(true)}
-                className="w-full h-full object-cover" 
-                alt="Logo Sede" 
+                className="w-full h-full object-cover"
+                alt="Logo Sede"
               />
             ) : (
               <Landmark size={18} />
@@ -133,8 +138,8 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
           </div>
         </div>
 
-        {/* Navigation Items */}
-        <nav className="flex-1 space-y-1">
+        {/* Navigation Items — flex-1 + overflow-y-auto so it scrolls internally */}
+        <nav className="flex-1 overflow-y-auto space-y-1 min-h-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.path;
@@ -158,14 +163,16 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
           })}
         </nav>
 
-        {/* Change Sede / Logout */}
-        <button
-          onClick={handleLogout}
-          className="mt-auto flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-xl transition-all duration-200 text-sm font-bold"
-        >
-          <LogOut size={18} />
-          Cerrar Sesión
-        </button>
+        {/* Logout — shrink-0 keeps it anchored at the bottom always */}
+        <div className="shrink-0 pt-4 mt-4 border-t border-slate-100">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-xl transition-all duration-200 text-sm font-bold"
+          >
+            <LogOut size={18} />
+            Cerrar Sesión
+          </button>
+        </div>
       </aside>
     </>
   );
