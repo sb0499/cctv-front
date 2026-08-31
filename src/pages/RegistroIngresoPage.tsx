@@ -602,7 +602,7 @@ export default function RegistroIngresoPage() {
               ) : (
                 <>
                   <Send size={16} />
-                  Guardar y Emitir Reporte
+                  Guardar Ingreso
                 </>
               )}
             </button>

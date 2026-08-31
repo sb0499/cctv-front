@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Search, Clock, ShieldCheck, User, FileText, Send, CheckCircle2, AlertCircle, Calendar, X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LogOut, Search, Clock, ShieldCheck, Send, CheckCircle2, AlertCircle, Calendar, X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import SignaturePad from '@/components/SignaturePad';
 import Sidebar from '@/components/Sidebar';
 
@@ -22,20 +22,17 @@ interface Registro {
   estado: 'ABIERTO' | 'CERRADO';
 }
 
-type StatusTab = 'ABIERTO' | 'CERRADO' | 'TODOS';
-
 const PAGE_SIZE = 10;
 
 export default function RegistrarSalidaPage() {
   const { ccSlug } = useParams<{ ccSlug: string }>();
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-  
+
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<Registro[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<StatusTab>('ABIERTO');
   const [currentPage, setCurrentPage] = useState(1);
   const [ccName, setCcName] = useState('');
   const [adminUsername, setAdminUsername] = useState('Administrador');
@@ -60,22 +57,16 @@ export default function RegistrarSalidaPage() {
     validateSession();
   }, [ccSlug]);
 
-  // Reset to page 1 when search or tab changes
+  // Reset to page 1 on search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, activeTab]);
+  }, [searchTerm]);
 
   const validateSession = async () => {
     try {
-      if (!ccSlug) {
-        navigate('/');
-        return;
-      }
+      if (!ccSlug) { navigate('/'); return; }
       const response = await fetch(`${API_URL}/api/centros-comerciales/${ccSlug}`);
-      if (!response.ok) {
-        navigate('/');
-        return;
-      }
+      if (!response.ok) { navigate('/'); return; }
       const ccData = await response.json();
       setCcName(ccData.nombre);
       localStorage.setItem('selectedCCId', ccData.id.toString());
@@ -83,12 +74,9 @@ export default function RegistrarSalidaPage() {
       localStorage.setItem('selectedCCColor', ccData.color || '#3b82f6');
       localStorage.setItem('selectedCCLogo', ccData.logo || '');
       document.documentElement.style.setProperty('--primary-color', ccData.color || '#3b82f6');
-      
+
       const token = localStorage.getItem('adminToken');
-      if (!token) {
-        navigate(`/${ccSlug}/login`);
-        return;
-      }
+      if (!token) { navigate(`/${ccSlug}/login`); return; }
 
       setAdminUsername(localStorage.getItem('adminNombreCompleto') || localStorage.getItem('adminUsername') || 'Administrador');
       await fetchRecords(token);
@@ -106,8 +94,9 @@ export default function RegistrarSalidaPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        const data = await response.json();
-        setRecords(data);
+        const data: Registro[] = await response.json();
+        // Only keep OPEN records — closed ones are managed from Historial
+        setRecords(data.filter(r => r.estado === 'ABIERTO'));
       }
     } catch (error) {
       console.error('Error fetching records:', error);
@@ -116,24 +105,12 @@ export default function RegistrarSalidaPage() {
     }
   };
 
-  // Count by status for tab badges
-  const countByStatus = {
-    ABIERTO: records.filter(r => r.estado === 'ABIERTO').length,
-    CERRADO: records.filter(r => r.estado === 'CERRADO').length,
-    TODOS: records.length,
-  };
-
-  // Apply tab filter first, then search filter
-  const tabFiltered = records.filter(record => {
-    if (activeTab === 'TODOS') return true;
-    return record.estado === activeTab;
-  });
-
-  const filteredRecords = tabFiltered.filter(record => {
-    const searchLower = searchTerm.toLowerCase();
+  // Search filter
+  const filteredRecords = records.filter(record => {
+    const s = searchTerm.toLowerCase();
     return (
-      record.visitante_nombre.toLowerCase().includes(searchLower) ||
-      record.visitante_cedula.includes(searchLower)
+      record.visitante_nombre.toLowerCase().includes(s) ||
+      record.visitante_cedula.includes(s)
     );
   });
 
@@ -166,10 +143,8 @@ export default function RegistrarSalidaPage() {
       setModalError('La firma del visitante es obligatoria para registrar la salida.');
       return;
     }
-
     setModalLoading(true);
     setModalError(null);
-
     try {
       const token = localStorage.getItem('adminToken');
       const response = await fetch(`${API_URL}/api/ingresos/${selectedRecord.id}/salida`, {
@@ -180,16 +155,14 @@ export default function RegistrarSalidaPage() {
         },
         body: JSON.stringify({ observaciones, firmaBase64: signature })
       });
-
       const data = await response.json();
-
       if (response.ok) {
         setModalSuccess({ msg: 'Salida registrada exitosamente.', pdfUrl: data.pdfUrl });
         if (token) fetchRecords(token);
       } else {
         setModalError(data.message || 'Error al registrar la salida.');
       }
-    } catch (err) {
+    } catch {
       setModalError('Error de conexión con el servidor.');
     } finally {
       setModalLoading(false);
@@ -207,22 +180,16 @@ export default function RegistrarSalidaPage() {
     );
   }
 
-  const tabs: { key: StatusTab; label: string; color: string; activeColor: string }[] = [
-    { key: 'ABIERTO',  label: 'Activos',  color: 'text-amber-600 border-amber-200 bg-amber-50', activeColor: 'bg-amber-500 text-white border-amber-500' },
-    { key: 'CERRADO',  label: 'Cerrados', color: 'text-slate-500 border-slate-200 bg-white',    activeColor: 'bg-slate-700 text-white border-slate-700' },
-    { key: 'TODOS',    label: 'Todos',    color: 'text-primary border-primary/20 bg-primary/5', activeColor: 'bg-primary text-white border-primary' },
-  ];
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
       <Sidebar username={adminUsername} />
-      
+
       <main className="flex-1 p-4 sm:p-8 overflow-y-auto max-w-5xl mx-auto w-full">
         <header className="mb-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200/60 pb-6">
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Registrar Salida de Visitantes</h1>
-              <p className="text-slate-500 text-sm mt-1">Busca y finaliza las visitas activas de CCTV</p>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Registrar Salida</h1>
+              <p className="text-slate-500 text-sm mt-1">Visitas activas en curso — {ccName}</p>
             </div>
             <div className="bg-white border border-slate-200 px-4 py-2.5 rounded-2xl flex items-center gap-2 shadow-sm">
               <Calendar className="text-primary" size={16} />
@@ -233,37 +200,17 @@ export default function RegistrarSalidaPage() {
           </div>
         </header>
 
-        {/* Search + Tabs */}
-        <div className="mb-6 space-y-4">
+        {/* Search */}
+        <div className="mb-6">
           <div className="relative max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
               type="text"
-              placeholder="Buscar por Nombre o Cédula del visitante..."
+              placeholder="Buscar por Nombre o Cédula..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-semibold shadow-sm"
             />
-          </div>
-
-          {/* Status Tabs */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {tabs.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all duration-200 cursor-pointer ${
-                  activeTab === tab.key ? tab.activeColor : tab.color
-                }`}
-              >
-                {tab.label}
-                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold ${
-                  activeTab === tab.key ? 'bg-white/25' : 'bg-slate-100 text-slate-600'
-                }`}>
-                  {countByStatus[tab.key]}
-                </span>
-              </button>
-            ))}
           </div>
         </div>
 
@@ -273,32 +220,37 @@ export default function RegistrarSalidaPage() {
           </div>
         ) : filteredRecords.length === 0 ? (
           <div className="bg-white border border-slate-200/70 p-12 text-center text-slate-400 flex flex-col items-center gap-3 rounded-2xl shadow-sm">
-            <Search size={32} className="text-slate-300" />
-            <p className="text-sm font-bold">
-              {activeTab === 'ABIERTO' ? 'No hay visitas activas en este momento.' : 'No se encontraron registros.'}
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+              <CheckCircle2 size={28} className="text-emerald-400" />
+            </div>
+            <p className="text-sm font-bold text-slate-600">
+              {searchTerm ? 'No se encontraron visitas activas con esa búsqueda.' : 'No hay visitas activas en este momento.'}
             </p>
+            <p className="text-xs text-slate-400">Las visitas cerradas se consultan desde el módulo de Historial.</p>
           </div>
         ) : (
           <>
+            {/* Active record count badge */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs font-bold text-slate-500">
+                {filteredRecords.length} visita{filteredRecords.length !== 1 ? 's' : ''} activa{filteredRecords.length !== 1 ? 's' : ''}
+              </span>
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            </div>
+
             <div className="grid grid-cols-1 gap-4">
               {paginatedRecords.map((record) => (
                 <div
                   key={record.id}
-                  className={`bg-white border transition-all p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${
-                    record.estado === 'ABIERTO' ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200 hover:border-slate-300'
-                  }`}
+                  className="bg-white border border-amber-200 bg-amber-50/10 transition-all p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
                 >
                   <div className="space-y-1.5 flex-1">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="text-xs font-bold text-slate-500">
                         {new Date(record.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider border ${
-                        record.estado === 'ABIERTO'
-                          ? 'bg-amber-100 text-amber-800 border-amber-200'
-                          : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
-                        {record.estado}
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider border bg-amber-100 text-amber-800 border-amber-200">
+                        EN CURSO
                       </span>
                       {record.orden_trabajo && (
                         <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[9px] font-bold">
@@ -312,40 +264,19 @@ export default function RegistrarSalidaPage() {
                     </div>
                     <div className="flex items-center gap-4 text-[11px] text-slate-400 font-semibold mt-1">
                       <span className="flex items-center gap-1"><Clock size={12} /> Ingreso: {record.hora_ingreso}</span>
-                      {record.hora_salida && (
-                        <span className="flex items-center gap-1"><Clock size={12} /> Salida: {record.hora_salida}</span>
-                      )}
+                      <span className="text-slate-300">·</span>
+                      <span className="text-slate-500 text-[11px]">{record.tipo_funcionario}{record.especificar_funcionario ? ` (${record.especificar_funcionario})` : ''}</span>
                     </div>
                   </div>
 
                   <div className="shrink-0 w-full sm:w-auto">
-                    {record.estado === 'ABIERTO' ? (
-                      <button
-                        onClick={() => openSalidaModal(record)}
-                        className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
-                      >
-                        <LogOut size={14} />
-                        Registrar Salida
-                      </button>
-                    ) : record.pdf_url ? (
-                      <a
-                        href={record.pdf_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl border border-slate-200/80 transition-all cursor-pointer"
-                      >
-                        <FileText size={14} />
-                        Descargar PDF
-                      </a>
-                    ) : (
-                      <span
-                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-slate-400 font-bold text-[10px] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-                        title="Este registro fue migrado desde el sistema anterior y no tiene PDF generado"
-                      >
-                        <FileText size={12} />
-                        Sin PDF · Migrado
-                      </span>
-                    )}
+                    <button
+                      onClick={() => openSalidaModal(record)}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
+                    >
+                      <LogOut size={14} />
+                      Registrar Salida
+                    </button>
                   </div>
                 </div>
               ))}
@@ -355,7 +286,7 @@ export default function RegistrarSalidaPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
                 <p className="text-xs text-slate-500 font-semibold">
-                  Mostrando <span className="font-bold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRecords.length)}</span> de <span className="font-bold text-slate-700">{filteredRecords.length}</span> registros
+                  Mostrando <span className="font-bold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRecords.length)}</span> de <span className="font-bold text-slate-700">{filteredRecords.length}</span>
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -386,7 +317,7 @@ export default function RegistrarSalidaPage() {
       {modalOpen && selectedRecord && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            
+
             {/* Modal Header */}
             <div className="px-6 py-5 bg-primary text-white flex justify-between items-center shrink-0">
               <div>
@@ -430,7 +361,7 @@ export default function RegistrarSalidaPage() {
                     </div>
                   )}
 
-                  {/* Informacion de Ingreso Bloqueada */}
+                  {/* Datos de Ingreso */}
                   <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl space-y-3">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                       <ShieldCheck size={14} className="text-primary" /> Datos de Ingreso (Bloqueados)
@@ -461,7 +392,7 @@ export default function RegistrarSalidaPage() {
                     </div>
                   </div>
 
-                  {/* Observaciones (Editable) */}
+                  {/* Observaciones */}
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                       Observaciones de Salida
@@ -523,11 +454,9 @@ export default function RegistrarSalidaPage() {
                 </form>
               )}
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

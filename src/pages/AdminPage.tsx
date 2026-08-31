@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Users, Clock, Search, ExternalLink, Calendar, Hash, FileText, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { FileSpreadsheet, Users, Clock, Search, ExternalLink, Calendar, Hash, FileText, ChevronLeft, ChevronRight, AlertCircle, X, Filter } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 
 const PAGE_SIZE = 15;
+
+type EstadoFilter = '' | 'ABIERTO' | 'CERRADO';
 
 export default function AdminPage() {
   const { ccSlug } = useParams<{ ccSlug: string }>();
@@ -14,6 +16,7 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [ccName, setCcName] = useState('Sede');
   const [adminUsername, setAdminUsername] = useState('Administrador');
@@ -66,10 +69,10 @@ export default function AdminPage() {
     validateCC();
   }, [ccSlug]);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, fechaDesde, fechaHasta]);
+  }, [searchTerm, fechaDesde, fechaHasta, estadoFilter]);
 
   const fetchRecords = async (token: string) => {
     try {
@@ -89,10 +92,17 @@ export default function AdminPage() {
     }
   };
 
+  // Export passes current active filters to the backend
   const handleExportPDFReport = async () => {
     const token = localStorage.getItem('adminToken');
     try {
-      const response = await fetch(`${API_URL}/api/admin/reporte-pdf`, {
+      const params = new URLSearchParams();
+      if (fechaDesde) params.set('fechaDesde', fechaDesde);
+      if (fechaHasta) params.set('fechaHasta', fechaHasta);
+      if (estadoFilter) params.set('estado', estadoFilter);
+
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const response = await fetch(`${API_URL}/api/admin/reporte-pdf${qs}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -115,12 +125,13 @@ export default function AdminPage() {
     setSearchTerm('');
     setFechaDesde('');
     setFechaHasta('');
+    setEstadoFilter('');
   };
 
-  // Client-side filter: text search + date range
+  // Client-side filter: text search + date range + estado
   const filteredRecords = records.filter(record => {
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = (
+    const matchesSearch = !searchTerm || (
       record.visitante_nombre.toLowerCase().includes(searchLower) ||
       record.visitante_cedula.toLowerCase().includes(searchLower) ||
       record.operador_cctv.toLowerCase().includes(searchLower) ||
@@ -129,12 +140,12 @@ export default function AdminPage() {
       (record.detalle_actividad_autorizacion && record.detalle_actividad_autorizacion.toLowerCase().includes(searchLower))
     );
 
-    // Date range filter — compare YYYY-MM-DD strings
     const recordDateStr = record.fecha ? new Date(record.fecha).toISOString().split('T')[0] : '';
     const matchesFechaDesde = fechaDesde ? recordDateStr >= fechaDesde : true;
     const matchesFechaHasta = fechaHasta ? recordDateStr <= fechaHasta : true;
+    const matchesEstado = estadoFilter ? record.estado === estadoFilter : true;
 
-    return matchesSearch && matchesFechaDesde && matchesFechaHasta;
+    return matchesSearch && matchesFechaDesde && matchesFechaHasta && matchesEstado;
   });
 
   // Pagination
@@ -144,7 +155,8 @@ export default function AdminPage() {
     currentPage * PAGE_SIZE
   );
 
-  const hasActiveFilters = searchTerm || fechaDesde || fechaHasta;
+  const hasActiveFilters = !!(searchTerm || fechaDesde || fechaHasta || estadoFilter);
+  const activeFilterCount = [searchTerm, fechaDesde, fechaHasta, estadoFilter].filter(Boolean).length;
 
   if (loading) {
     return (
@@ -162,33 +174,26 @@ export default function AdminPage() {
     const rDate = r.fecha ? new Date(r.fecha).toISOString().split('T')[0] : '';
     return rDate === todayStr;
   }).length;
-
   const externalCount = records.filter(r => r.tipo_funcionario === 'Proveedor' || r.tipo_funcionario === 'Otros').length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans">
-      
-      {/* Sidebar Navigation */}
       <Sidebar username={adminUsername} />
 
-      {/* Main Content */}
       <main className="flex-1 p-4 sm:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
-        
+
         {/* Header */}
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8 border-b border-slate-200/60 pb-6">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              Historial de Trabajos
-            </h1>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Historial de Trabajos</h1>
             <p className="text-slate-500 text-sm mt-1">Gestión, control y auditoría de reportes registrados en {ccName}</p>
           </div>
-          
           <button
             onClick={handleExportPDFReport}
             className="w-full lg:w-auto flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md shadow-red-600/10 transition-all duration-300 active:scale-[0.98] cursor-pointer text-sm"
           >
             <FileSpreadsheet size={16} />
-            Exportar Reporte Consolidado
+            Exportar{hasActiveFilters ? ` (${filteredRecords.length} filtrados)` : ' Reporte Completo'}
           </button>
         </header>
 
@@ -201,7 +206,6 @@ export default function AdminPage() {
             <div className="text-2xl font-black text-slate-900">{records.length}</div>
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5">Total Registros</div>
           </div>
-
           <div className="bg-white border border-slate-200/70 p-6 rounded-2xl shadow-sm hover:border-amber-500/30 transition-all group">
             <div className="text-amber-600 mb-4 bg-amber-50 border border-amber-100 w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
               <Clock size={18} />
@@ -209,7 +213,6 @@ export default function AdminPage() {
             <div className="text-2xl font-black text-slate-900">{recordsTodayCount}</div>
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5">Registrados Hoy</div>
           </div>
-
           <div className="bg-white border border-slate-200/70 p-6 rounded-2xl shadow-sm hover:border-purple-500/30 transition-all group">
             <div className="text-purple-600 mb-4 bg-purple-50 border border-purple-100 w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
               <Users size={18} />
@@ -221,73 +224,95 @@ export default function AdminPage() {
 
         {/* Data Table Section */}
         <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm overflow-hidden">
-          
-          {/* Table Utilities */}
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <span>Listado de Actividades</span>
+
+          {/* Filters Panel */}
+          <div className="p-5 border-b border-slate-100 bg-slate-50/60">
+            {/* Top row: title + count + search */}
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-900 text-sm">Listado de Actividades</h3>
                 <span className="bg-slate-200 text-slate-600 text-xs px-2.5 py-0.5 rounded-full font-bold">{filteredRecords.length}</span>
                 {hasActiveFilters && (
-                  <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-bold border border-primary/20">
-                    Filtrado
+                  <span className="flex items-center gap-1 bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-bold border border-primary/20">
+                    <Filter size={9} /> {activeFilterCount} filtro{activeFilterCount > 1 ? 's' : ''}
                   </span>
                 )}
-              </h3>
+              </div>
               <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                 <input
                   type="text"
                   placeholder="Buscar por visitante, cédula, OT..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
+                  className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
                 />
               </div>
             </div>
 
-            {/* Date Range Filters */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 shrink-0">
-                <Calendar size={14} /> Filtrar por fecha:
-              </span>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-slate-400 font-semibold">Desde</label>
-                  <input
-                    type="date"
-                    value={fechaDesde}
-                    onChange={(e) => setFechaDesde(e.target.value)}
-                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:bg-white focus:border-primary outline-none transition-all font-semibold"
-                  />
+            {/* Filter pills row */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Estado filter */}
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</span>
+                <div className="flex gap-1 ml-1">
+                  {(['', 'ABIERTO', 'CERRADO'] as EstadoFilter[]).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setEstadoFilter(opt)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
+                        estadoFilter === opt
+                          ? opt === 'ABIERTO'
+                            ? 'bg-amber-500 text-white'
+                            : opt === 'CERRADO'
+                            ? 'bg-slate-700 text-white'
+                            : 'bg-primary text-white'
+                          : 'text-slate-500 hover:bg-slate-100'
+                      }`}
+                    >
+                      {opt === '' ? 'Todos' : opt}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-slate-400 font-semibold">Hasta</label>
-                  <input
-                    type="date"
-                    value={fechaHasta}
-                    onChange={(e) => setFechaHasta(e.target.value)}
-                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:bg-white focus:border-primary outline-none transition-all font-semibold"
-                  />
-                </div>
-                {hasActiveFilters && (
-                  <button
-                    onClick={handleClearFilters}
-                    className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-lg text-xs font-bold hover:bg-rose-100 transition-colors cursor-pointer"
-                  >
-                    Limpiar filtros
-                  </button>
-                )}
               </div>
+
+              {/* Date range */}
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+                <Calendar size={13} className="text-slate-400 shrink-0" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Desde</span>
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className="bg-transparent text-xs text-slate-700 font-semibold outline-none w-32 cursor-pointer"
+                />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Hasta</span>
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className="bg-transparent text-xs text-slate-700 font-semibold outline-none w-32 cursor-pointer"
+                />
+              </div>
+
+              {/* Clear button */}
+              {hasActiveFilters && (
+                <button
+                  onClick={handleClearFilters}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors cursor-pointer"
+                >
+                  <X size={12} /> Limpiar
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Table Container */}
+          {/* Table */}
           <div className="overflow-x-auto">
             {filteredRecords.length === 0 ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
                 <Search size={28} className="text-slate-300" />
-                <p className="text-xs font-bold">No se encontraron registros que coincidan con los filtros aplicados.</p>
+                <p className="text-xs font-bold">No se encontraron registros con los filtros aplicados.</p>
                 {hasActiveFilters && (
                   <button onClick={handleClearFilters} className="text-primary text-xs font-bold hover:underline">
                     Limpiar filtros
@@ -312,7 +337,7 @@ export default function AdminPage() {
                     <tr key={record.id} className="hover:bg-slate-50/50 transition-colors duration-150">
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600">
                         <div className="font-bold text-slate-800">{record.fecha ? new Date(record.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : ''}</div>
-                        <div className="text-[10px] font-medium text-slate-400 mt-0.5">{record.hora_ingreso} {record.hora_salida ? ` - ${record.hora_salida}` : ''}</div>
+                        <div className="text-[10px] font-medium text-slate-400 mt-0.5">{record.hora_ingreso}{record.hora_salida ? ` - ${record.hora_salida}` : ''}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="font-extrabold text-slate-800 text-xs">{record.visitante_nombre}</div>
@@ -330,8 +355,7 @@ export default function AdminPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
                         {record.orden_trabajo ? (
                           <span className="inline-flex items-center gap-1 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md text-[10px] font-bold text-primary">
-                            <Hash size={9} />
-                            {record.orden_trabajo}
+                            <Hash size={9} />{record.orden_trabajo}
                           </span>
                         ) : (
                           <span className="text-slate-400 text-xs">-</span>
@@ -369,8 +393,7 @@ export default function AdminPage() {
                             className="inline-flex items-center gap-1 text-slate-400 font-bold text-[10px] px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg"
                             title="Registro migrado desde sistema anterior — sin firma digital disponible"
                           >
-                            <AlertCircle size={10} />
-                            Sin PDF · Migrado
+                            <AlertCircle size={10} /> Sin PDF · Migrado
                           </span>
                         )}
                       </td>
