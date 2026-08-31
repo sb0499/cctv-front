@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FileSpreadsheet, Users, Clock, Search, ExternalLink, Calendar, Hash, FileText, ChevronLeft, ChevronRight, AlertCircle, X, Filter } from 'lucide-react';
+import { FileSpreadsheet, Table2, Users, Clock, Search, ExternalLink, Calendar, Hash, FileText, ChevronLeft, ChevronRight, AlertCircle, X, Filter } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 
 const PAGE_SIZE = 15;
@@ -92,32 +92,54 @@ export default function AdminPage() {
     }
   };
 
-  // Export passes current active filters to the backend
+  // Build shared filter query string for exports
+  const buildExportParams = () => {
+    const params = new URLSearchParams();
+    if (fechaDesde) params.set('fechaDesde', fechaDesde);
+    if (fechaHasta) params.set('fechaHasta', fechaHasta);
+    if (estadoFilter) params.set('estado', estadoFilter);
+    return params.toString() ? `?${params.toString()}` : '';
+  };
+
   const handleExportPDFReport = async () => {
     const token = localStorage.getItem('adminToken');
     try {
-      const params = new URLSearchParams();
-      if (fechaDesde) params.set('fechaDesde', fechaDesde);
-      if (fechaHasta) params.set('fechaHasta', fechaHasta);
-      if (estadoFilter) params.set('estado', estadoFilter);
-
-      const qs = params.toString() ? `?${params.toString()}` : '';
-      const response = await fetch(`${API_URL}/api/admin/reporte-pdf${qs}`, {
+      const response = await fetch(`${API_URL}/api/admin/reporte-pdf${buildExportParams()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Reporte_Consolidado_Trabajo_${ccSlug}_${new Date().toISOString().split('T')[0]}.pdf`;
+        a.download = `Reporte_${ccSlug}_${new Date().toISOString().split('T')[0]}.pdf`;
         document.body.appendChild(a);
         a.click();
         a.remove();
       }
     } catch (error) {
       console.error('PDF Report error', error);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    const token = localStorage.getItem('adminToken');
+    try {
+      const response = await fetch(`${API_URL}/api/admin/reporte-excel${buildExportParams()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Reporte_${ccSlug}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch (error) {
+      console.error('Excel Report error', error);
     }
   };
 
@@ -188,13 +210,24 @@ export default function AdminPage() {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Historial de Trabajos</h1>
             <p className="text-slate-500 text-sm mt-1">Gestión, control y auditoría de reportes registrados en {ccName}</p>
           </div>
-          <button
-            onClick={handleExportPDFReport}
-            className="w-full lg:w-auto flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-md shadow-red-600/10 transition-all duration-300 active:scale-[0.98] cursor-pointer text-sm"
-          >
-            <FileSpreadsheet size={16} />
-            Exportar{hasActiveFilters ? ` (${filteredRecords.length} filtrados)` : ' Reporte Completo'}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-bold shadow-md shadow-emerald-600/10 transition-all duration-300 active:scale-[0.98] cursor-pointer text-sm"
+              title="Exportar a Excel (.xlsx)"
+            >
+              <Table2 size={16} />
+              Excel{hasActiveFilters ? ` (${filteredRecords.length})` : ''}
+            </button>
+            <button
+              onClick={handleExportPDFReport}
+              className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-xl font-bold shadow-md shadow-red-600/10 transition-all duration-300 active:scale-[0.98] cursor-pointer text-sm"
+              title="Exportar a PDF"
+            >
+              <FileSpreadsheet size={16} />
+              PDF{hasActiveFilters ? ` (${filteredRecords.length})` : ''}
+            </button>
+          </div>
         </header>
 
         {/* Stats Grid */}
