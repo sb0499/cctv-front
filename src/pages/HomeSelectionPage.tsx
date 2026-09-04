@@ -64,10 +64,13 @@ export default function HomeSelectionPage() {
       <div className="max-w-2xl w-full bg-white border border-slate-100 rounded-3xl shadow-[0_20px_50px_-20px_rgba(15,23,42,0.06)] p-8 sm:p-10 relative z-10">
         <div className="text-center mb-10">
           <img src="/cctv-logo.svg" alt="Logo CCTV" className="w-28 h-28 mx-auto mb-6 drop-shadow-lg" />
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            REGISTRO DE TRABAJO CCTV
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+            SICC
           </h1>
-          <p className="text-slate-500 text-sm mt-2 font-medium">Seleccione un Centro Comercial para acceder al sistema</p>
+          <span className="inline-block text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full uppercase tracking-wider mt-1.5">
+            Sistema Integrado de Control y Cámaras
+          </span>
+          <p className="text-slate-500 text-sm mt-3 font-medium">Seleccione un Centro Comercial para acceder al sistema</p>
         </div>
 
         {malls.length === 0 ? (
