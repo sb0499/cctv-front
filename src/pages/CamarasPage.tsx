@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Video, Plus, Search, Edit2, Trash2, AlertCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Video, Plus, Search, Edit2, Trash2, AlertCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, Filter, Image as ImageIcon, Upload, Eye, X } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 
 const PAGE_SIZE = 10;
@@ -29,6 +29,8 @@ export default function CamarasPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedCamId, setSelectedCamId] = useState<number | null>(null);
+  const [viewImageModal, setViewImageModal] = useState<{ url: string; nombre: string } | null>(null);
+
   const [formData, setFormData] = useState({
     codigo_camara: '',
     nombre: '',
@@ -39,6 +41,7 @@ export default function CamarasPage() {
     modelo_id: '',
     estado: 1,
     ip: '',
+    imagen: '',
     observaciones: '',
   });
 
@@ -104,6 +107,29 @@ export default function CamarasPage() {
     }
   };
 
+  const getCameraImageUrl = (img: string | null) => {
+    if (!img) return null;
+    if (img.startsWith('data:image/') || img.startsWith('http://') || img.startsWith('https://')) {
+      return img;
+    }
+    return `${API_URL}/cameras/${img}`;
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setModalError('La imagen no debe superar los 10MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData((prev) => ({ ...prev, imagen: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleOpenCreateModal = () => {
     setModalMode('create');
     setSelectedCamId(null);
@@ -117,6 +143,7 @@ export default function CamarasPage() {
       modelo_id: modelos[0]?.id || '',
       estado: 1,
       ip: '',
+      imagen: '',
       observaciones: '',
     });
     setModalError(null);
@@ -136,6 +163,7 @@ export default function CamarasPage() {
       modelo_id: cam.modelo_id || '',
       estado: cam.estado !== undefined ? Number(cam.estado) : 1,
       ip: cam.ip || '',
+      imagen: cam.imagen || '',
       observaciones: cam.observaciones || '',
     });
     setModalError(null);
@@ -200,11 +228,10 @@ export default function CamarasPage() {
       loadData();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError('Error de red al eliminar cámara');
+      setError('Error de conexión al eliminar la cámara');
     }
   };
 
-  // Filter & Pagination
   const filteredCamaras = camaras.filter((cam) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
@@ -219,7 +246,7 @@ export default function CamarasPage() {
     return matchesSearch && matchesSector && matchesEstado;
   });
 
-  const totalPages = Math.ceil(filteredCamaras.length / PAGE_SIZE);
+  const totalPages = Math.ceil(filteredCamaras.length / PAGE_SIZE) || 1;
   const paginatedCamaras = filteredCamaras.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
@@ -324,6 +351,7 @@ export default function CamarasPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-center">Foto</th>
                       <th className="px-4 py-3">Código</th>
                       <th className="px-4 py-3">Nombre</th>
                       <th className="px-4 py-3">Sector / Nivel</th>
@@ -335,53 +363,74 @@ export default function CamarasPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                    {paginatedCamaras.map((cam) => (
-                      <tr key={cam.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-3 font-mono font-medium text-slate-900">{cam.codigo_camara || 'N/A'}</td>
-                        <td className="px-4 py-3 font-medium text-slate-800">{cam.nombre}</td>
-                        <td className="px-4 py-3">
-                          <div className="text-slate-900 font-medium">{cam.sector_nombre || '-'}</div>
-                          <div className="text-xs text-slate-400">{cam.nivel_nombre || '-'}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-slate-800">{cam.tipo_nombre || '-'}</div>
-                          <div className="text-xs text-slate-400">{cam.modelo_nombre || '-'}</div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">{cam.propietario_nombre || '-'}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{cam.ip || '-'}</td>
-                        <td className="px-4 py-3 text-center">
-                          {Number(cam.estado) === 1 ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Operativa
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
-                              <XCircle className="w-3.5 h-3.5" />
-                              Falla / Inoperativa
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleOpenEditModal(cam)}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Editar Cámara"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(cam.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Eliminar Cámara"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {paginatedCamaras.map((cam) => {
+                      const imgUrl = getCameraImageUrl(cam.imagen);
+                      return (
+                        <tr key={cam.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 text-center">
+                            {imgUrl ? (
+                              <button
+                                onClick={() => setViewImageModal({ url: imgUrl, nombre: cam.nombre })}
+                                className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 relative group cursor-pointer inline-block"
+                                title="Ver imagen de cámara"
+                              >
+                                <img src={imgUrl} alt={cam.nombre} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                  <Eye className="w-4 h-4 text-white" />
+                                </div>
+                              </button>
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 mx-auto">
+                                <ImageIcon className="w-5 h-5" />
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-mono font-medium text-slate-900">{cam.codigo_camara || 'N/A'}</td>
+                          <td className="px-4 py-3 font-medium text-slate-800">{cam.nombre}</td>
+                          <td className="px-4 py-3">
+                            <div className="text-slate-900 font-medium">{cam.sector_nombre || '-'}</div>
+                            <div className="text-xs text-slate-400">{cam.nivel_nombre || '-'}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-slate-800">{cam.tipo_nombre || '-'}</div>
+                            <div className="text-xs text-slate-400">{cam.modelo_nombre || '-'}</div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{cam.propietario_nombre || '-'}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-slate-500">{cam.ip || '-'}</td>
+                          <td className="px-4 py-3 text-center">
+                            {Number(cam.estado) === 1 ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Operativa
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                                <XCircle className="w-3.5 h-3.5" />
+                                Falla / Inoperativa
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => handleOpenEditModal(cam)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Editar Cámara"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(cam.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Eliminar Cámara"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -415,6 +464,33 @@ export default function CamarasPage() {
         </div>
       </main>
 
+      {/* View Image Modal */}
+      {viewImageModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white max-w-2xl w-full rounded-2xl shadow-2xl overflow-hidden relative">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-blue-600" />
+                Fotografía Cámara: {viewImageModal.nombre}
+              </h3>
+              <button
+                onClick={() => setViewImageModal(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-slate-950 max-h-[70vh]">
+              <img
+                src={viewImageModal.url}
+                alt={viewImageModal.nombre}
+                className="max-h-[65vh] w-auto object-contain rounded-lg shadow-md"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Form */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -431,6 +507,48 @@ export default function CamarasPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Image Upload */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Fotografía de Referencia</label>
+                <div className="flex items-center gap-4">
+                  {formData.imagen ? (
+                    <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shrink-0">
+                      <img
+                        src={getCameraImageUrl(formData.imagen) || formData.imagen}
+                        alt="Vista previa"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, imagen: '' })}
+                        className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5 shadow hover:bg-rose-700"
+                        title="Quitar imagen"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 bg-slate-50 shrink-0">
+                      <ImageIcon className="w-6 h-6 mb-1 text-slate-300" />
+                      <span className="text-[10px]">Sin foto</span>
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 transition-colors">
+                      <Upload className="w-3.5 h-3.5 text-slate-500" />
+                      {formData.imagen ? 'Cambiar Imagen' : 'Subir Imagen'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <p className="text-[11px] text-slate-400 mt-1">JPG, PNG o WEBP (Máx. 10MB)</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Código Cámara</label>
