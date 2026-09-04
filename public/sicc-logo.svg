@@ -6,6 +6,10 @@
       <stop offset="50%" stop-color="#2563eb" /> <!-- Blue 600 -->
       <stop offset="100%" stop-color="#0284c7" /> <!-- Sky 600 -->
     </linearGradient>
+    <linearGradient id="glowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.9" />
+    </linearGradient>
     <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#2563eb" flood-opacity="0.25"/>
     </filter>

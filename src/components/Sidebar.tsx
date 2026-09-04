@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { FilePlus, History, LogOut, Menu, X, FileText, Landmark, Users } from 'lucide-react';
+import { FilePlus, History, LogOut, Menu, X, FileText, Landmark, Users, Camera, Video, FolderTree, ClipboardList, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 
 interface SidebarProps {
   username?: string;
@@ -12,6 +12,7 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
   const pathname = location.pathname;
   const params = useParams<{ ccSlug: string }>();
   const [isOpen, setIsOpen] = useState(false);
+  const [secamOpen, setSecamOpen] = useState(true);
   const [ccName, setCcName] = useState('Sede');
   const [ccLogo, setCcLogo] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
@@ -39,41 +40,36 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
   };
 
   const rol = localStorage.getItem('adminRol') || 'OPERADOR';
-  const navItems = [
+
+  // Submenú SECAM
+  const secamItems = [
     {
-      label: 'Nuevo Registro',
-      path: `/${ccSlug}`,
-      icon: FilePlus,
+      label: 'Inspección Cámaras',
+      path: `/${ccSlug}/inspeccion`,
+      icon: Camera,
+      roles: ['ADMIN', 'SUPERVISOR', 'OPERADOR'],
     },
     {
-      label: 'Registrar Salida',
-      path: `/${ccSlug}/salida`,
-      icon: LogOut,
-    }
-  ];
+      label: 'Inventario Cámaras',
+      path: `/${ccSlug}/camaras`,
+      icon: Video,
+      roles: ['ADMIN', 'SUPERVISOR'],
+    },
+    {
+      label: 'Reportes Inspección',
+      path: `/${ccSlug}/reportes-inspeccion`,
+      icon: ClipboardList,
+      roles: ['ADMIN', 'SUPERVISOR'],
+    },
+    {
+      label: 'Catálogos Cámaras',
+      path: `/${ccSlug}/catalogos`,
+      icon: FolderTree,
+      roles: ['ADMIN', 'SUPERVISOR'],
+    },
+  ].filter((item) => item.roles.includes(rol));
 
-  if (rol === 'ADMIN' || rol === 'SUPERVISOR') {
-    navItems.push({
-      label: 'Historial',
-      path: `/${ccSlug}/admin`,
-      icon: History,
-    });
-  }
-
-  if (rol === 'ADMIN') {
-    navItems.push(
-      {
-        label: 'Gestión Usuarios',
-        path: `/${ccSlug}/usuarios`,
-        icon: Users,
-      },
-      {
-        label: 'Gestión Sedes',
-        path: `/${ccSlug}/centros`,
-        icon: Landmark,
-      }
-    );
-  }
+  const isSecamActive = secamItems.some((item) => pathname === item.path);
 
   return (
     <>
@@ -99,28 +95,22 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar Drawer
-          - Mobile: fixed overlay drawer (full height, independent of content)
-          - Desktop: sticky, h-screen, flex-col so logout is always at bottom.
-            The nav section is overflow-y-auto so it scrolls internally if there
-            are many menu items, without the page needing to scroll.
-      */}
       <aside
-        className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-100 text-slate-800 flex flex-col p-6 z-50 md:z-10 transition-transform duration-300 md:translate-x-0 ${
+        className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-100 text-slate-800 flex flex-col p-4 md:p-5 z-50 md:z-10 transition-transform duration-300 md:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo and Brand */}
-        <div className="flex items-center gap-3 mb-8 pb-6 border-b border-slate-100 shrink-0">
-          <img src="/cctv-logo.svg" alt="Logo CCTV" className="w-10 h-10 drop-shadow-sm shrink-0" />
+        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100 shrink-0">
+          <img src="/cctv-logo.svg" alt="Logo SICC" className="w-9 h-9 drop-shadow-sm shrink-0" />
           <div className="flex flex-col">
-            <span className="text-sm font-extrabold tracking-wide leading-none text-slate-900">REGISTRO</span>
-            <span className="text-[10px] font-bold text-primary tracking-widest mt-1">DE TRABAJO</span>
+            <span className="text-sm font-black tracking-wider leading-none text-slate-900">SICC</span>
+            <span className="text-[9px] font-bold text-primary tracking-wider mt-0.5 uppercase">Control & Cámaras</span>
           </div>
         </div>
 
-        <div className="mb-6 px-4 py-3 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-3 shrink-0">
-          <div className="bg-primary/10 w-9 h-9 rounded-xl text-primary flex items-center justify-center overflow-hidden border border-primary/10 shrink-0">
+        <div className="mb-4 px-3 py-2.5 bg-primary/5 border border-primary/10 rounded-xl flex items-center gap-3 shrink-0">
+          <div className="bg-primary/10 w-8 h-8 rounded-lg text-primary flex items-center justify-center overflow-hidden border border-primary/10 shrink-0">
             {!logoError && ccLogo ? (
               <img
                 src={ccLogo}
@@ -129,38 +119,144 @@ export default function Sidebar({ username = 'Admin' }: SidebarProps) {
                 alt="Logo Sede"
               />
             ) : (
-              <Landmark size={18} />
+              <Landmark size={16} />
             )}
           </div>
           <div className="flex flex-col overflow-hidden">
-            <span className="text-[10px] text-primary font-bold uppercase tracking-wider">Centro Comercial</span>
+            <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Centro Comercial</span>
             <span className="text-xs font-bold text-slate-800 truncate" title={ccName}>{ccName}</span>
           </div>
         </div>
 
-        {/* Navigation Items — flex-1 + overflow-y-auto so it scrolls internally */}
-        <nav className="flex-1 overflow-y-auto space-y-1 min-h-0">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.path;
-            return (
+        {/* Navigation Items */}
+        <nav className="flex-1 overflow-y-auto custom-scrollbar space-y-0.5 min-h-0 pr-1">
+          {/* Seccion Bitacora CCTV */}
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-1">Bitácora Accesos</div>
+
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              navigate(`/${ccSlug}`);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${
+              pathname === `/${ccSlug}`
+                ? 'bg-primary text-white shadow-md shadow-primary/10'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <FilePlus size={16} />
+            Nuevo Registro
+          </button>
+
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              navigate(`/${ccSlug}/salida`);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${
+              pathname === `/${ccSlug}/salida`
+                ? 'bg-primary text-white shadow-md shadow-primary/10'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <LogOut size={16} />
+            Registrar Salida
+          </button>
+
+          {(rol === 'ADMIN' || rol === 'SUPERVISOR') && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                navigate(`/${ccSlug}/admin`);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${
+                pathname === `/${ccSlug}/admin`
+                  ? 'bg-primary text-white shadow-md shadow-primary/10'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <History size={16} />
+              Historial Bitácora
+            </button>
+          )}
+
+          {/* Menú SECAM (Desplegable) */}
+          <div className="pt-2">
+            <button
+              onClick={() => setSecamOpen(!secamOpen)}
+              className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${
+                isSecamActive ? 'text-primary bg-primary/10' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className="text-primary" />
+                <span>SECAM (Cámaras)</span>
+              </div>
+              {secamOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+
+            {secamOpen && (
+              <div className="mt-1 ml-2 pl-2 border-l-2 border-slate-100 space-y-0.5">
+                {secamItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.path;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => {
+                        setIsOpen(false);
+                        navigate(item.path);
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
+                        isActive
+                          ? 'bg-primary text-white shadow-sm shadow-primary/10'
+                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Icon size={15} />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Administración (ADMIN) */}
+          {rol === 'ADMIN' && (
+            <div className="pt-2 space-y-0.5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-1">Administración</div>
               <button
-                key={item.path}
                 onClick={() => {
                   setIsOpen(false);
-                  navigate(item.path);
+                  navigate(`/${ccSlug}/usuarios`);
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer ${
-                  isActive
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${
+                  pathname === `/${ccSlug}/usuarios`
                     ? 'bg-primary text-white shadow-md shadow-primary/10'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                <Icon size={18} />
-                {item.label}
+                <Users size={16} />
+                Gestión Usuarios
               </button>
-            );
-          })}
+
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  navigate(`/${ccSlug}/centros`);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${
+                  pathname === `/${ccSlug}/centros`
+                    ? 'bg-primary text-white shadow-md shadow-primary/10'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <Landmark size={16} />
+                Gestión Sedes
+              </button>
+            </div>
+          )}
         </nav>
 
         {/* Logout — shrink-0 keeps it anchored at the bottom always */}

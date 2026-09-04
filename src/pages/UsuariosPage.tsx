@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UserPlus, Search, Edit2, Trash2, Key, AlertCircle, CheckCircle2, Shield, Landmark, ChevronLeft, ChevronRight } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, Key, AlertCircle, CheckCircle2, Shield, Landmark, ChevronLeft, ChevronRight, Mail } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 
 const PAGE_SIZE = 10;
@@ -22,12 +22,15 @@ export default function UsuariosPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [filterEmail, setFilterEmail] = useState('');
   const [formData, setFormData] = useState({
     username: '',
+    email: '',
     password: '',
     nombre_completo: '',
     centro_comercial_id: '',
     rol: 'OPERADOR',
+    enviar_email: true,
   });
 
   // Notifications
@@ -88,10 +91,10 @@ export default function UsuariosPage() {
     loadData();
   }, [ccSlug]);
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when search or filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, filterEmail]);
 
   const fetchUsers = async (token: string) => {
     try {
@@ -101,13 +104,17 @@ export default function UsuariosPage() {
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
+      } else if (response.status === 401) {
+        navigate(`/${ccSlug}/login`);
       } else if (response.status === 403) {
         navigate(`/${ccSlug}`);
       } else {
-        navigate(`/${ccSlug}/login`);
+        const resData = await response.json().catch(() => ({}));
+        showNotification(resData.message || 'Error al obtener la lista de usuarios.', false);
       }
     } catch (err) {
       console.error('Error fetching users:', err);
+      showNotification('Error de conexión al obtener usuarios.', false);
     }
   };
 
@@ -141,19 +148,23 @@ export default function UsuariosPage() {
       setSelectedUserId(user.id);
       setFormData({
         username: user.username,
+        email: user.email || '',
         password: '', // Leave blank when editing unless changing
         nombre_completo: user.nombre_completo,
         centro_comercial_id: user.centro_comercial_id.toString(),
         rol: user.rol,
+        enviar_email: user.enviar_email === 1 || user.enviar_email === true,
       });
     } else {
       setSelectedUserId(null);
       setFormData({
         username: '',
+        email: '',
         password: '',
         nombre_completo: '',
         centro_comercial_id: activeCCId,
         rol: 'OPERADOR',
+        enviar_email: true,
       });
     }
     setIsModalOpen(true);
@@ -175,7 +186,7 @@ export default function UsuariosPage() {
 
     // Form validations
     if (!formData.username.trim() || !formData.nombre_completo.trim() || !formData.centro_comercial_id || !formData.rol) {
-      setModalError('Todos los campos son obligatorios.');
+      setModalError('Todos los campos obligatorios deben ser llenados.');
       return;
     }
 
@@ -261,12 +272,15 @@ export default function UsuariosPage() {
 
   const filteredUsers = users.filter(user => {
     const term = searchTerm.toLowerCase();
-    return (
+    const matchesTerm = (
       user.username.toLowerCase().includes(term) ||
+      (user.email && user.email.toLowerCase().includes(term)) ||
       user.nombre_completo.toLowerCase().includes(term) ||
       (user.centro_comercial_nombre && user.centro_comercial_nombre.toLowerCase().includes(term)) ||
       user.rol.toLowerCase().includes(term)
     );
+    const matchesEmail = filterEmail !== '' ? (user.enviar_email === 1 || user.enviar_email === true) === (filterEmail === '1') : true;
+    return matchesTerm && matchesEmail;
   });
 
   // Pagination
@@ -313,7 +327,7 @@ export default function UsuariosPage() {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               Gestión de Usuarios
             </h1>
-            <p className="text-slate-500 text-sm mt-1">Crea, edita y administra los accesos y roles del personal asignado a cada sede.</p>
+            <p className="text-slate-500 text-sm mt-1">Crea, edita y administra los accesos y notificaciones del personal asignado a cada sede.</p>
           </div>
           
           <button
@@ -327,21 +341,35 @@ export default function UsuariosPage() {
 
         {/* Content Table */}
         <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm overflow-hidden">
-          {/* Search bar */}
+          {/* Search bar & Filters */}
           <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 bg-slate-50/50">
             <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
               <span>Listado de Cuentas</span>
               <span className="bg-slate-200 text-slate-600 text-xs px-2.5 py-0.5 rounded-full font-bold">{filteredUsers.length}</span>
             </h3>
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, usuario, sede..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
-              />
+
+            <div className="flex items-center gap-3">
+              {/* Filtro Recibe Correo */}
+              <select
+                value={filterEmail}
+                onChange={(e) => setFilterEmail(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:border-primary outline-none"
+              >
+                <option value="">Recibe Correo: Todos</option>
+                <option value="1">Sí ✉️</option>
+                <option value="0">No</option>
+              </select>
+
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre, usuario, correo, sede..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary/10 transition-all outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -350,9 +378,10 @@ export default function UsuariosPage() {
               <thead>
                 <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
                   <th className="px-6 py-4">Nombre Completo</th>
-                  <th className="px-6 py-4">Usuario</th>
+                  <th className="px-6 py-4">Usuario / Email</th>
                   <th className="px-6 py-4">Sede Asignada</th>
                   <th className="px-6 py-4">Rol</th>
+                  <th className="px-6 py-4">Recibe Correo</th>
                   <th className="px-6 py-4 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -363,8 +392,14 @@ export default function UsuariosPage() {
                       <td className="px-6 py-4 font-bold text-slate-900">
                         {user.nombre_completo}
                       </td>
-                      <td className="px-6 py-4 font-mono text-slate-600">
-                        {user.username}
+                      <td className="px-6 py-4">
+                        <div className="font-mono text-slate-800 font-semibold">{user.username}</div>
+                        {user.email && (
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                            <Mail size={10} className="text-slate-400" />
+                            {user.email}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="inline-flex items-center gap-1.5 text-slate-500">
@@ -383,6 +418,17 @@ export default function UsuariosPage() {
                           <Shield size={10} />
                           {user.rol}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.enviar_email === 1 || user.enviar_email === true ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
+                            Sí ✉️
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-slate-400 font-semibold bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                            No
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
@@ -406,7 +452,7 @@ export default function UsuariosPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-semibold">
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-semibold">
                       Ningún usuario coincide con la búsqueda
                     </td>
                   </tr>
@@ -468,7 +514,7 @@ export default function UsuariosPage() {
               )}
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nombre Completo</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nombre Completo *</label>
                 <input
                   type="text"
                   name="nombre_completo"
@@ -481,7 +527,7 @@ export default function UsuariosPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nombre de Usuario</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nombre de Usuario *</label>
                 <input
                   type="text"
                   name="username"
@@ -491,6 +537,21 @@ export default function UsuariosPage() {
                   placeholder="Ej: jperez (sin espacios)"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:border-primary outline-none transition-all font-mono"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Correo Electrónico (Notificaciones PDF)</label>
+                <div className="relative">
+                  <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="Ej: usuario@empresa.com"
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:border-primary outline-none transition-all"
+                  />
+                </div>
               </div>
 
                <div className="grid grid-cols-2 gap-4">
@@ -519,7 +580,7 @@ export default function UsuariosPage() {
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  {modalMode === 'create' ? 'Contraseña' : 'Nueva Contraseña'}
+                  {modalMode === 'create' ? 'Contraseña *' : 'Nueva Contraseña'}
                 </label>
                 <div className="relative">
                   <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -533,6 +594,21 @@ export default function UsuariosPage() {
                     className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:border-primary outline-none transition-all"
                   />
                 </div>
+              </div>
+
+              {/* Checkbox de Enviar Email */}
+              <div className="pt-2">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={formData.enviar_email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, enviar_email: e.target.checked }))}
+                    className="w-4 h-4 rounded text-primary focus:ring-primary accent-[var(--primary-color,#3b82f6)] cursor-pointer"
+                  />
+                  <span className="text-xs font-semibold text-slate-700">
+                    Recibe notificaciones por correo (Reportes PDF) ✉️
+                  </span>
+                </label>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-6">

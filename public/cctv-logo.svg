@@ -1,42 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
   <defs>
-    <!-- Gradients -->
-    <linearGradient id="shieldGrad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1e3a8a"/> <!-- Deep Corporate Blue -->
-      <stop offset="60%" stop-color="#0f172a"/> <!-- Dark Navy Slate -->
-      <stop offset="100%" stop-color="#1e1b4b"/> <!-- Indigo Shadow -->
+    <!-- Modern Gradient Palette -->
+    <linearGradient id="siccGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" /> <!-- Indigo 600 -->
+      <stop offset="50%" stop-color="#2563eb" /> <!-- Blue 600 -->
+      <stop offset="100%" stop-color="#0284c7" /> <!-- Sky 600 -->
     </linearGradient>
-    <linearGradient id="accentGrad" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#3b82f6"/> <!-- Bright Blue -->
-      <stop offset="100%" stop-color="#60a5fa"/> <!-- Light Blue Accent -->
-    </linearGradient>
-    <filter id="shadow" x="0" y="0" width="100" height="100" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#2563eb" flood-opacity="0.25"/>
     </filter>
   </defs>
 
-  <!-- Base Shield/Hexagon Container -->
-  <path d="M50 8 L85 28 L85 72 L50 92 L15 72 L15 28 Z" fill="url(#shieldGrad)" stroke="url(#accentGrad)" stroke-width="3" stroke-linejoin="round" />
-  
-  <!-- Outer glowing decorative thin border -->
-  <path d="M50 14 L80 31.5 L80 68.5 L50 86 L20 68.5 L20 31.5 Z" stroke="#3b82f6" stroke-opacity="0.3" stroke-width="1" stroke-linejoin="round"/>
+  <!-- Minimal Shield Container -->
+  <path d="M60 12 L100 28 C100 68 82 96 60 108 C38 96 20 68 20 28 Z" 
+        fill="url(#siccGradient)" 
+        filter="url(#softGlow)" />
 
-  <!-- Stylized Camera Icon -->
-  <g transform="translate(0, 0)" filter="url(#shadow)">
-    <!-- Bracket / mount -->
-    <path d="M35 62 L42 62 L42 52" stroke="url(#accentGrad)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M30 67 L47 67" stroke="url(#accentGrad)" stroke-width="2.5" stroke-linecap="round" />
-    
-    <!-- Camera Body -->
-    <rect x="34" y="32" width="28" height="18" rx="4" fill="url(#accentGrad)" />
-    <!-- Camera Lens Cover -->
-    <path d="M62 35 L74 29 L74 53 L62 47 Z" fill="url(#accentGrad)" opacity="0.9" stroke="url(#accentGrad)" stroke-width="1" stroke-linejoin="round" />
-    
-    <!-- Camera Lens details -->
-    <circle cx="48" cy="41" r="5.5" fill="#0f172a" stroke="#ffffff" stroke-width="1.2" />
-    <circle cx="48.5" cy="40.5" r="2" fill="#60a5fa" />
-    
-    <!-- Red recording dot (corporate status pulse) -->
-    <circle cx="39" cy="37" r="1.5" fill="#ef4444" />
-  </g>
+  <!-- Inner Subtle Accent Border -->
+  <path d="M60 19 L93 33.5 C93 68.5 77.5 93 60 102.5 C42.5 93 27 68.5 27 33.5 Z" 
+        stroke="white" 
+        stroke-opacity="0.25" 
+        stroke-width="1.5" 
+        fill="none" />
+
+  <!-- Minimal Camera Lens & Aperture Motif -->
+  <!-- Camera Body Contour -->
+  <rect x="40" y="44" width="40" height="28" rx="8" fill="white" />
+  
+  <!-- Camera Lens Outer Ring -->
+  <circle cx="60" cy="58" r="9" fill="url(#siccGradient)" />
+  
+  <!-- Camera Lens Reflection Inner Dot -->
+  <circle cx="60" cy="58" r="4" fill="white" />
+  <circle cx="62" cy="56" r="1.5" fill="#38bdf8" />
+
+  <!-- Top Camera Flash / Sensor Notch -->
+  <rect x="52" y="39" width="16" height="5" rx="2.5" fill="white" opacity="0.9" />
+
+  <!-- Status Indicator Dot -->
+  <circle cx="73" cy="50" r="2" fill="#ef4444" />
 </svg>
